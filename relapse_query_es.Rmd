@@ -1,32 +1,11 @@
 ---
 title: "Relapse Query ES"
 output: html_document
-date: "2023-10-03"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
 ```{r}
 library(data.table)
@@ -63,7 +42,7 @@ bmi_prt_list <- bmi_prt_list %>%
 bmi_prt_list
 ```
 
-#this is copied from Libby's relapse_query code, will find all documented relapses in PROMOTE Database for participants in PRT cohort
+#this code will find all documented relapses in PROMOTE Database for participants in PRT cohort
 ```{r}
 #Database history
 relapse_hx <- database[,c("id_participant", "relapse_number", "relapse_first_date", "relapse_first_type", "relapse_second_date", "relapse_second_type", "relapse_third_date", "relapse_third_type", "relapse_fourth_date", "relapse_fourth_type", "relapse_fifth_date", "relapse_fifth_type", "relapse_sixth_date", "relapse_sixth_type", "relapse_seventh_date", "relapse_seventh_type", "relapse_eighth_date", "relapse_eighth_type", "relapse_ninth_date", "relapse_ninth_type", "relapse_tenth_date", "relapse_tenth_type", "relapse_eleventh_date", "relapse_eleventh_type", "relapse_twelfth_date", "relapse_twelfth_type", "relapse_thirteenth_date", "relapse_thirteenth_type", "relapse_fourteenth_date", "relapse_fourteenth_type", "relapse_fifteenth_date", "relapse_fifteenth_type", "relapse_sixteenth_date", "relapse_sixteenth_type", "relapse_seventeenth_date", "relapse_seventeenth_type", "relapse_eighteenth_date", "relapse_eighteenth_type", "relapse_nineteenth_date", "relapse_nineteenth_type", "relapse_twentieth_date", "relapse_twentieth_type")]
