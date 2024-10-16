@@ -1,34 +1,13 @@
 ---
 title: "confirmed disability code"
 output: html_document
-date: "2023-11-14"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
-
-#my only goal for this query is to have an output for participants that indicates whether or not they've had confirmed disability worsening/improvement
+# to assess if the participant had confirmed disability worsening/improvement
 #starting by reading in the prt list for the project this was originally made for, going to assign baseline PDDS as the one closest to (BUT AFTER) start_date
 ```{r}
 library(dplyr)
@@ -83,7 +62,7 @@ base_scores <- flat %>% #base_scores contains id_participant, baseline score and
 base_scores
 ```
 
-#now I'm going to re-merge flat and base_scores to add in the baseline date and score, then can start filtering based on date
+#re-merge flat and base_scores to add in the baseline date and score, then can start filtering based on date
 ```{r}
 kitty2 <- merge(flat, base_scores, by = "id_participant")
 kitty <- kitty2 %>% 
