@@ -1,7 +1,5 @@
 ---
 title: "Sustain Progression"
-author: "Chenyi Chen"
-date: "`r Sys.Date()`"
 output: html_document
 ---
 
@@ -43,7 +41,6 @@ conflict_prefer("select", "dplyr")
 conflicted::conflicts_prefer(dplyr::first)
 ```
 
-#This query was written by Chenyi
 ```{r}
 bmi_prt_list2 <- read.csv("all_repop.csv")
 bmi_prt_list <- bmi_prt_list2 %>% 
