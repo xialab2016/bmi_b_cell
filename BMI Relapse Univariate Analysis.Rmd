@@ -1,0 +1,314 @@
+---
+title: "BMI Relapse Univariate Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+#This code reads in the relapse outcomes desired, performs univariate analysis for relapse outcomes, then multivariate analysis of early B-cell repopulation vs. relapse outcomes
+#need to have updated "bmi_bcell_relapse_outcomes.csv" first
+```
+
+```{r}
+database <- read.csv('database.csv')
+database
+```
+
+```{r}
+#This is ALL relapses and the outcomes annualized_relapse, n (total number of annotated relapses), and relapse_time_gap
+all_relapses <- read.csv("bmi_bcell_relapse_outcomes.csv")
+all_relapses <- all_relapses %>% select(-X, -dob) %>% unique()
+all_relapses
+```
+
+```{r}
+all_repop <- read.csv("all_repop.csv") #reading in repop data frame
+all_repop
+```
+
+#merging all_repop and all_relapses for analysis 
+```{r}
+relapse_outcome2 <- merge(all_repop, all_relapses, by = "id_participant", all.x = TRUE)
+relapse_outcome2
+```
+```{r}
+relapse_outcome <- relapse_outcome2 %>% 
+  select(-X, -age.x) %>% 
+  rename(cd19_date = blood_date) #renaming
+relapse_outcome$relapse_date <- ymd(relapse_outcome$relapse_date) #reformatting date columns
+relapse_outcome$date_msdx <- ymd(relapse_outcome$date_msdx)
+relapse_outcome
+```
+
+```{r}
+#I just use this to check the total number of participants
+relapse_outcome %>% drop_na(n) %>% select(id_participant) %>% unique()
+```
+
+#making the relapse_time_gap = 2 years for all participants who didn't experience any relapses in the follow-up window
+```{r}
+relapse_outcome2 <- relapse_outcome %>% 
+  drop_na(n)
+relapse_outcome2$relapse_time_gap[is.na(relapse_outcome2$relapse_time_gap)] <- 2
+outcome_df <- relapse_outcome2
+outcome_df
+```
+
+#dichot variables, univariate analysis
+```{r}
+#sex v. n
+#res<-t.test(n ~ subject_sex, data=outcome_df)
+
+#sex v. ann relapse rate
+res<-t.test(annualized_relapse ~ subject_sex, data=outcome_df)
+
+#sex v. time to relapse
+#res<-t.test(relapse_time_gap ~ subject_sex, data=outcome_df)
+
+#race eth v n
+#res<-t.test(n ~ race_eth, data=outcome_df)
+
+#race eth v ann relapse rate
+#res<-t.test(annualized_relapse ~ race_eth, data=outcome_df)
+
+#race eth v time to relapse
+#res<-t.test(relapse_time_gap ~ race_eth, data=outcome_df)
+res
+```
+
+
+#cont variables, univariate analysis
+```{r}
+#age v n
+#model = lm(n ~ age, data = outcome_df)
+
+#age v ann relapse rate
+#model = lm(annualized_relapse ~ age, data = outcome_df)
+
+#age v time to relapse
+#model = lm(relapse_time_gap ~ age, data = outcome_df)
+
+#disease duration v n
+#model = lm(n ~ dx_dur, data = outcome_df)
+
+#disease duration v ann relapse rate
+#model = lm(annualized_relapse ~ dx_dur, data = outcome_df)
+
+#disease duration v time to relapse
+#model = lm(relapse_time_gap ~ dx_dur, data = outcome_df)
+
+#avg diffDate v n
+#model = lm(n ~ diffDate_mo, data = outcome_df)
+
+#avg diffDate v ann relapse rate
+#model = lm(annualized_relapse ~ diffDate_mo, data = outcome_df)
+
+#avg diffDate v time to relapse
+#model = lm(relapse_time_gap ~ diffDate_mo, data = outcome_df)
+
+#baseline cd19 v n
+#model = lm(n ~ baseline_cd19_percent, data = outcome_df)
+
+#baseline cd19 v ann relapse rate
+model = lm(annualized_relapse ~ baseline_cd19_percent, data = lizzy)
+
+#baseline cd19 v time to relapse
+#model = lm(relapse_time_gap ~ baseline_cd19_percent, data = outcome_df)
+
+#baseline bmi v n
+#model = lm(n ~ baseline_bmi, data = outcome_df)
+
+#baseline bmi v ann relapse rate
+#model = lm(annualized_relapse ~ baseline_bmi, data = outcome_df)
+
+#baseline bmi v time to relapse
+#model = lm(relapse_time_gap ~ baseline_bmi, data = outcome_df)
+summary(model)
+confint(model)
+```
+
+```{r}
+#making one row per participant, separating by DMT 
+bees <- outcome_df %>% 
+  select(id_participant, n, annualized_relapse, relapse_time_gap, age, dx_dur, repop_overall, bcell_type, subject_sex) %>% 
+  unique() %>% 
+  mutate(time_to_relapse_mo = relapse_time_gap/30.42)
+bees
+
+ocr_bees <- bees %>% 
+  filter(bcell_type == 1)
+
+ritux_bees <- bees %>% 
+  filter(bcell_type == 2 | bcell_type == 3 | bcell_type == 4)
+```
+
+
+#actual repop / relapse analysis!
+#trying linear regression between repop (0 = no, 1 = yes) & n (relapse number) to start
+#adjust covariates as is necessary here
+```{r}
+#all DMTs combined
+model <- lm(n ~ repop_overall + subject_sex + dx_dur, data = bees)
+#summary(model)
+#confint(model)
+
+#only OCr prts
+#model <- lm(n ~ repop_overall + subject_sex + dx_dur, data = ocr_bees)
+#summary(model)
+#confint(model)
+
+#only rit rux prts
+#model <- lm(n ~ repop_overall + subject_sex + dx_dur, data = ritux_bees)
+summary(model)
+confint(model)
+
+```
+
+```{r}
+#I use this to check the number of participants
+ritux_bees %>% select(id_participant) %>% unique()
+```
+
+#trying annualized relapse rate (calculated by finding the number of years elapsed between date of first neurological symptom to date of CD19 blood draw, then dividing the total number of relapses by that many years)
+#using linear regression again
+```{r}
+#all DMTs combined
+#model <- lm(annualized_relapse ~ repop_overall + subject_sex + dx_dur, data = bees)
+#summary(model)
+#confint(model)
+
+#ocr
+#model <- glm(annualized_relapse ~ repop_overall +subject_sex + dx_dur, data = ocr_bees)
+#summary(model)
+#confint(model)
+
+#rux ritux
+model <- glm(annualized_relapse ~ repop_overall + subject_sex + dx_dur, data = ritux_bees)
+summary(model)
+confint(model)
+```
+
+#multivariate analysis, time_to_relapse_mo as outcome
+```{r}
+#all DMTs combined
+#model <- glm(time_to_relapse_mo ~ repop_overall + subject_sex + dx_dur, data = bees)
+#summary(model)
+#confint(model)
+
+#ocr
+#model <- glm(time_to_relapse_mo ~ repop_overall + subject_sex + dx_dur, data = ocr_bees)
+#summary(model)
+#confint(model)
+
+#rux ritux
+model <- glm(time_to_relapse_mo ~ repop_overall + subject_sex + dx_dur, data = ritux_bees)
+summary(model)
+confint(model)
+```
+
+
+#outcome distribution overview below
+```{r}
+library(ggplot2)
+#outcome_df %>% ggplot(aes(x = n)) +
+  #geom_histogram()
+
+#number of participants who have repopulation event
+#outcome_df %>% filter(repop == 0) %>% select(id_participant) %>% unique()
+
+#number of participants who have did NOT have repopulation event
+#outcome_df %>% filter(repop == 1) %>% select(id_participant) %>% unique()
+
+#number of participants who had at least one relapse
+#outcome_df %>% filter(relapse == 1) %>% select(id_participant) %>% unique()
+
+#number of participants who have not had at least one relapse
+#outcome_df %>% filter(relapse == 0) %>% select(id_participant) %>% unique()
+```
+
+#now trying logistic regression using both binary outcomes for repopulation AND relapse
+#note: didn't end up using this in the final analysis/paper
+```{r}
+#all participants combined
+#model <- glm(relapse ~ repop_overall + age + dx_dur + subject_sex + race_eth + bcell_type, data = outcome_df, family = gaussian)
+#summary(model)
+#confint(model)
+
+#ocr participants
+#model <- glm(relapse ~ repop + age + dx_dur + subject_sex + race_eth, data = ocr_outcome, family = gaussian)
+#summary(model)
+#confint(model)
+
+#rux ritux
+model <- glm(relapse ~ repop + age + dx_dur + subject_sex + race_eth + bcell_type, data = rux_ritux_outcome, family = gaussian)
+summary(model)
+confint(model)
+```
+
+
+#annualized relapse rate vs. overall repopulation at participant level
+#again, didn't end up using this in final analysis/paper
+```{r}
+#all DMTs combined
+model <- lm(ann_relapse_rate ~ repop_overall + age + dx_dur + subject_sex + race_eth, data = outcome_df)
+summary(model)
+#confint(model)
+
+#ocr
+#model <- glm(ann_relapse_rate ~ repop_overall + age, data = ocr_outcome)
+#summary(model)
+#confint(model)
+
+#rux ritux
+#model <- glm(ann_relapse_rate ~ repop_overall + bcell_type + age, data = rux_ritux_outcome)
+#summary(model)
+#confint(model)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

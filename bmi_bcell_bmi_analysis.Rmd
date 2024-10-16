@@ -1,0 +1,611 @@
+---
+title: "BMI bcell bmi analysis"
+output: html_document
+date: "2023-11-29"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+database <- read.csv("database.csv")
+all_repop <- read.csv("all_repop.csv")
+all_repop <- all_repop %>% 
+  select(-X, -dob)
+```
+
+#brief demographic overview...I run these lines individually to make Table 1 (demographics)
+```{r}
+#Overall
+#number of unique participants
+#all_repop %>% select(id_participant) %>% unique()
+#male
+#all_repop %>% filter(subject_sex == 1) %>% select(id_participant) %>% unique()
+#female
+#all_repop %>% filter(subject_sex == 2) %>% select(id_participant) %>% unique()
+#age 
+#ages <- all_repop %>% select(id_participant, age) %>% unique()
+#mean(ages$age)
+#sd(ages$age)
+#race_eth
+#all_repop %>% filter(race_eth == 1) %>% select(id_participant) %>% unique()
+#all_repop %>% filter(race_eth == 2 & race != 99 & ethnicity != 99 & !is.na(race) & !is.na(ethnicity)) %>% select(id_participant, race, ethnicity, race_eth) %>% unique() %>% select(id_participant) %>% unique()
+#ocrevus
+#all_repop %>% filter(bcell_type == 1) %>% select(id_participant) %>% unique()
+#rituxann
+#all_repop %>% filter(bcell_type == 2) %>% select(id_participant) %>% unique()
+#ruxience
+#all_repop %>% filter(bcell_type == 3) %>% select(id_participant) %>% unique()
+#truxima
+#all_repop %>% filter(bcell_type == 4) %>% select(id_participant) %>% unique()
+#dx_dur
+#dx_durss <- all_repop %>% select(id_participant, dx_dur) %>% drop_na() %>%  unique() #need to divide by 12 for yrs
+#mean(dx_durss$dx_dur)
+#sd(dx_durss$dx_dur)
+#diffDate
+#diffDates <- all_repop %>% select(id_participant, diffDate_mo) %>% drop_na() %>% unique()
+#mean(diffDates$diffDate_mo)
+#sd(diffDates$diffDate_mo)
+```
+
+
+
+```{r}
+#UPMC only...I run these lines individually to make Table 1 (demographics)
+upmc_repop <- all_repop %>% 
+  filter(str_detect(id_participant, "PRT")) %>% 
+  unique()
+#upmc_repop
+#number of unique participants
+#upmc_repop %>% select(id_participant) %>% unique()
+#male
+#upmc_repop %>% filter(subject_sex == 1) %>% select(id_participant) %>% unique()
+#female
+#upmc_repop %>% filter(subject_sex == 2) %>% select(id_participant) %>% unique()
+#age 
+#ages <- upmc_repop %>% select(id_participant, age) %>% unique()
+#mean(ages$age)
+#sd(ages$age)
+#race_eth
+#upmc_repop %>% filter(race_eth == 2) %>% select(id_participant) %>% unique()
+#ocrevus
+#upmc_repop %>% filter(bcell_type == 1) %>% select(id_participant) %>% unique()
+#rituxann
+#upmc_repop %>% filter(bcell_type == 2) %>% select(id_participant) %>% unique()
+#ruxience
+#upmc_repop %>% filter(bcell_type == 3) %>% select(id_participant) %>% unique()
+#truxima
+#upmc_repop %>% filter(bcell_type == 4) %>% select(id_participant) %>% unique()
+#dx_dur
+#dx_durss <- upmc_repop %>% select(id_participant, dx_dur) %>% drop_na() %>%  unique()
+#mean(dx_durss$dx_dur)
+#sd(dx_durss$dx_dur)
+#diffDate
+#diffDates <- upmc_repop %>% select(id_participant, diffDate_mo) %>% drop_na() %>% unique()
+#mean(diffDates$diffDate_mo)
+#sd(diffDates$diffDate_mo)
+```
+
+```{r}
+#CUMC only...I run these lines individually to make Table 1 (demographics)
+cumc_repop <- anti_join(all_repop, upmc_repop, by = "id_participant")
+#cumc_repop
+#number of unique participants
+#cumc_repop %>% select(id_participant) %>% unique()
+#male
+#cumc_repop %>% filter(subject_sex == 1) %>% select(id_participant) %>% unique()
+#female
+#cumc_repop %>% filter(subject_sex == 2) %>% select(id_participant) %>% unique()
+#age 
+#ages <- cumc_repop %>% select(id_participant, age) %>% unique()
+#mean(ages$age)
+#sd(ages$age)
+#race_eth
+#cumc_repop %>% filter(race_eth == 2) %>% select(id_participant) %>% unique()
+#ocrevus
+#cumc_repop %>% filter(bcell_type == 1) %>% select(id_participant) %>% unique()
+#rituxann
+#cumc_repop %>% filter(bcell_type == 2) %>% select(id_participant) %>% unique()
+#ruxience
+#cumc_repop %>% filter(bcell_type == 3) %>% select(id_participant) %>% unique()
+#truxima
+#cumc_repop %>% filter(bcell_type == 4) %>% select(id_participant) %>% unique()
+#dx_dur
+#dx_durss <- cumc_repop %>% select(id_participant, dx_dur) %>% drop_na() %>%  unique()
+#mean(dx_durss$dx_dur)
+#sd(dx_durss$dx_dur)
+#diffDate
+#diffDates <- cumc_repop %>% select(id_participant, diffDate_mo) %>% drop_na() %>% unique()
+#mean(diffDates$diffDate_mo)
+#sd(diffDates$diffDate_mo)
+```
+
+
+#formatting
+```{r}
+all_repop$blood_date <- ymd(all_repop$blood_date) #making all dates into proper date format
+all_repop$infusion_date <- ymd(all_repop$infusion_date)
+all_repop$baseline_blood_date <- ymd(all_repop$baseline_blood_date)
+all_repop$baseline_infusion_date <- ymd(all_repop$baseline_infusion_date)
+all_repop$bmi_date <- ymd(all_repop$bmi_date)
+all_repop$outcome_date_start <- ymd(all_repop$outcome_date_start)
+all_repop$outcome_date_end <- ymd(all_repop$outcome_date_end)
+outcome_df <- all_repop
+outcome_df <- outcome_df %>% 
+  group_by(id_participant) %>% 
+  mutate(avg_bmi = mean(bmi), avg_diffDate = mean(diffDate_mo, na.rm = TRUE)) %>% #adding column for avg_bmi, and for avg_diffDate
+  ungroup()
+#want to try adding a binary outcome "Obese" which will be: 0 = not obese (BMI < 30), 1 = obese (BMI >= 30)
+outcome_df <- outcome_df %>% 
+  mutate(obese = ifelse(bmi < 30, 0, 1)) #adding a dichotomous column "obese" (0 = not obese, 1 = obese)
+outcome_df
+```
+
+#univariate analysis
+#dichot variables
+```{r}
+#sex v. n
+#res<-t.test(repop ~ subject_sex, data=outcome_df)
+
+#race eth v n
+res<-t.test(repop ~ race_eth, data=outcome_df)
+
+#bcell group (ocr v. ritux & biosimilars)
+#res<-t.test(repop ~ bcell_group, data=outcome_df)
+res
+```
+
+#cont variables, univariate analysis cont'd
+```{r}
+#age v repop
+#model = glm(repop ~ age, data = outcome_df, family = "binomial")
+
+#disease duration v repop
+#model = glm(repop ~ dx_dur, data = outcome_df, family = "binomial")
+
+#diffDate v repop
+#model = glm(repop ~ diffDate_mo, data = outcome_df, family = "binomial")
+
+#baseline cd19 v repop
+#model = glm(repop ~ baseline_cd19_percent, data = outcome_df, family = "binomial")
+
+#baseline bmi v repop
+#model = glm(repop ~ baseline_bmi, data = outcome_df, family = "binomial")
+
+#dose v repop
+#model = glm(repop ~ bmi, data = outcome_df, family = "binomial")
+
+summary(model)
+confint(model)
+```
+
+
+```{r}
+#splitting outcome_df into separate data frames for ocrevus v ritux (& biosims)
+ocr_outcome_df <- outcome_df %>% 
+  filter(bcell_group == 1)
+
+ritux_outcome_df <- outcome_df %>% 
+  filter(bcell_group == 2)
+
+ocr_outcome_df
+ritux_outcome_df
+```
+
+```{r}
+#used this chunk to make a separate outcome_df but with only participants that have a baseline CD19% from before their first BCD infusion for a subgroup analysis
+lippy <- all_repop %>% 
+  select(id_participant, baseline_infusion_date, baseline_blood_date) %>% 
+  filter(baseline_infusion_date >= baseline_blood_date) %>% 
+  select(id_participant) %>% 
+  unique()
+lippy
+
+triage <- merge(outcome_df, lippy, by = "id_participant")
+triage
+```
+
+```{r}
+#just use this chunk of code to check number of unique participants in each DMT group
+ocr_outcome_df %>% select(id_participant) %>% unique()
+```
+#multivariate analysis (MAIN RESULT)
+```{r}
+#covariates that we want to include: diffDate_mo,race_eth
+
+#all prts
+model = glm(repop_overall ~ bmi + race_eth, data = outcome_df, family = "binomial")
+
+#model = glm(repop_overall ~ bmi + race_eth, data = ocr_outcome_df, family = "binomial")
+
+#model = glm(repop_overall ~ bmi + race_eth, data = ritux_outcome_df, family = "binomial")
+
+summary(model)
+confint(model)
+```
+
+#this chunk of code (and the one below it) separates to use obesity as predictor instead of BMI, but later decided not to use in the paper as the results showed the same thing as primary result
+```{r}
+bust <- outcome_df %>% 
+  select(id_participant, obese, repop_overall, race_eth, avg_diffDate, bcell_group, avg_bmi) %>% 
+  unique()
+bust
+
+ocr_bust <- bust %>% 
+  filter(bcell_group == 1)
+
+ritux_bust <- bust %>% 
+  filter(bcell_group == 2)
+```
+
+#this is a separate subgroup analysis using obese (binary) as the predictor instead of bmi
+```{r}
+#covariates that we want to include: race_eth
+
+#all
+model <- glm(repop_overall ~ obese + race_eth, data = bust, family = "binomial")
+#ocr
+#model <- glm(repop_overall ~ obese + race_eth, data = ocr_bust, family = "binomial")
+#ritux
+#model <- glm(repop_overall ~ obese + race_eth, data = ritux_bust, family = "binomial")
+summary(model)
+confint(model)
+```
+
+
+#Figure 1 v2 (boxplots)
+```{r}
+#making separate dfs to contain "weight_status" according to bmi in each row, then rbinding them all back together
+popi2 <- outcome_df
+popi_under <- popi2 %>% 
+  filter(bmi < 18.5) %>% 
+  mutate(weight_status = "underweight")
+popi_under
+
+popi_healthy <- popi2 %>% 
+  filter(bmi < 24.9 & bmi >18.5) %>% 
+  mutate(weight_status = "healthy")
+popi_healthy
+
+popi_over <- popi2 %>% 
+  filter(bmi < 29.9 & bmi >25.0) %>% 
+  mutate(weight_status = "overweight")
+popi_over
+
+popi_obese <- popi2 %>% 
+  filter(bmi < 30) %>% 
+  mutate(weight_status = "obese")
+popi_obese
+
+run <- rbind(popi_under,popi_healthy)
+run2 <-rbind(run, popi_over)
+run3 <- rbind(run2, popi_obese)
+popi_final <- run3 %>% 
+  select(id_participant, cd19_percent, weight_status, bmi) %>% 
+  unique()
+popi_final$bmi <- as.numeric(popi_final$bmi)
+popi_final$cd19_percent <- as.numeric(popi_final$cd19_percent)
+popi_final
+
+weight_order <- c('underweight', 'healthy', 'overweight', 'obese')
+
+popi_final %>% #this gives Fig 2
+  ggplot(aes(x =weight_status, y  = cd19_percent)) +
+  geom_violin() +
+  scale_x_discrete(limits = weight_order) +
+  geom_hline(yintercept = 2, linetype = "dashed") +
+  ggtitle("Weight status v. CD19% in early repopulation window")
+
+popi_final
+```
+
+
+```{r}
+frog <- outcome_df %>% 
+  select(id_participant, repop, bmi, blood_date) %>% 
+  unique()
+frog
+
+no_repop_frog <- frog %>% filter(repop == 0)
+repop_frog <- frog %>% filter(repop == 1)
+
+no_repop_frog
+repop_frog
+```
+
+```{r}
+#just used this chunk to check how many Ocr prts experienced early BCR vs Ritux prts experienced early BCR, I use this to make Table 3
+outcome_df %>% select(id_participant, repop, bcell_group, blood_date) %>% unique() %>% filter(bcell_group == 1)%>% filter(repop == 1)
+```
+
+
+
+
+#forest plot, BMI vs. early BCR
+```{r}
+df_forest_combined <- data.frame(Variable = 'BMI',
+                       OR = c(1.08), #need to enter these values manually after completing the multivariate analysis
+                       Lower=c(1.05),
+                       Upper=c(1.11))
+df_forest_combined$group <- "Combined"
+
+df_forest_ocrevus <- data.frame(Variable = 'BMI',
+                       OR = c(1.10),
+                       Lower=c(1.06),
+                       Upper=c(1.14))
+df_forest_ocrevus$group <- "Ocrevus"
+
+df_forest_ritux <- data.frame(Variable = 'BMI',
+                       OR = c(1.05),
+                       Lower=c(1.00),
+                       Upper=c(1.10))
+df_forest_ritux$group <- "Rituximab/Biosimilars"
+
+
+# combine the two datasets                      
+df_all = rbind(df_forest_combined, df_forest_ocrevus, df_forest_ritux)
+#colors
+dotCOLS = c("#a6d8f0","#f9b282", "#FFB6C1")
+barCOLS = c("#008fd5","#de6b35", "#FF69B4")
+
+ggplot(df_all, aes(x=Variable, y=OR, ymin=Lower, ymax=Upper,col=group,fill=group, group=group)) + 
+#specify position here
+  geom_linerange(size=5,position=position_dodge(width = 0.5)) +
+  geom_hline(yintercept=1, lty=2) +
+#specify position here too
+  geom_point(size=3, shape=21, colour="white", stroke = 0.5,position=position_dodge(width = 0.5)) +
+  scale_fill_manual(values=barCOLS)+
+  scale_color_manual(values=dotCOLS)+
+  #scale_x_discrete(name="Variable") +
+  scale_y_continuous(name="Odds ratio", limits = c(0.9, 1.25)) + #can adjust this manually as needed too
+  coord_flip() +
+  theme_minimal()
+```
+
+
+
+#going to try to make a forest plot for phase 2: using the main outcomes;
+###Confirmed disability worsening (6 month)
+###Annualized relapse rate
+```{r}
+library(patchwork)
+library(ggbreak)
+df_forest_combined <- data.frame(Outcome = c('confirmed_worsening', 'ann_relapse_rate'),
+                       OR = c(1.21, 0.98),
+                       Lower=c(0.47, 0.94),
+                       Upper=c(3.00, 1.01))
+df_forest_combined$group <- "Combined"
+
+df_forest_ocrevus <- data.frame(Outcome = c('confirmed_worsening', 'ann_relapse_rate'),
+                       OR = c(0.81, 0.98),
+                       Lower=c(0.24, 0.94),
+                       Upper=c(2.49, 1.02))
+df_forest_ocrevus$group <- "Ocrevus"
+#df_forest_ocrevus[,c("OR","Lower","Upper")] <- df_forest_ocrevus[,c("OR","Lower","Upper")] + 0.5
+
+df_forest_ritux <- data.frame(Outcome = c('confirmed_worsening', 'ann_relapse_rate'),
+                       OR = c(3.71, 0.98),
+                       Lower=c(0.67, 0.90),
+                       Upper=c(28.50, 1.07))
+df_forest_ritux$group <- "Rituximab/Biosimilars"
+#df_forest_ocrevus[,c("OR","Lower","Upper")] <- df_forest_ocrevus[,c("OR","Lower","Upper")] + 1.0
+
+# combine the two datasets                      
+df_all = rbind(df_forest_combined, df_forest_ocrevus, df_forest_ritux)
+# you can do the factoring here
+Outcome_order <- c('confirmed_worsening', 'ann_relapse_rate', 'n_relapses')
+df_all$Outcome = factor (df_all$Outcome, level=Outcome_order)
+#colors
+dotCOLS = c("#a6d8f0","#f9b282", "#FFB6C1")
+barCOLS = c("#008fd5","#de6b35", "#FF69B4")
+
+ggplot(df_all, aes(x=Outcome, y=OR, ymin=Lower, ymax=Upper,col=group,fill=group, group=group)) + 
+#specify position here
+  geom_linerange(size=5,position=position_dodge(width = 0.5)) +
+  geom_hline(yintercept=1, lty=2) +
+#specify position here too
+  geom_point(size=3, shape=21, colour="white", stroke = 0.5,position=position_dodge(width = 0.5)) +
+  scale_fill_manual(values=barCOLS)+
+  scale_color_manual(values=dotCOLS)+
+  scale_x_discrete(name="Outcomes") +
+  scale_y_continuous(name="Odds ratio", limits = c(0, 28.6), breaks = c(0, 0.50, 1.00, 1.5, 2.0, 2.5, 3.0, 3.5, 28.0, 28.5)) +
+  scale_y_break(c(3.75, 28)) +
+  coord_flip() +
+  theme_minimal()
+```
+
+
+
+#making forest plot for functional testing results
+```{r}
+library(ggsignif)
+library(ggplot2)
+df_forest_combined <- data.frame(Outcome = c('sdmt_percentage', 'peg_dom_avg', 'footwalk_avg'),
+                       OR = c(-0.2563, 0.943, 3.408939),
+                       Lower=c(-4.4, -12, 1.1),
+                       Upper=c(3.9, 13, 5.7))
+df_forest_combined$group <- "Combined"
+
+df_forest_ocrevus <- data.frame(Outcome = c('sdmt_percentage', 'peg_dom_avg', 'footwalk_avg'),
+                       OR = c(0.06049 , -0.360375, 3.054289),
+                       Lower=c(-4.6, -15, 1.0),
+                       Upper=c(4.7, 14, 5.1))
+df_forest_ocrevus$group <- "Ocrevus"
+#df_forest_ocrevus[,c("OR","Lower","Upper")] <- df_forest_ocrevus[,c("OR","Lower","Upper")] + 0.5
+
+df_forest_ritux <- data.frame(Outcome = c('sdmt_percentage', 'peg_dom_avg', 'footwalk_avg'),
+                       OR = c(NA, NA, NA),
+                       Lower=c(NA, NA, NA),
+                       Upper=c(NA, NA, NA))
+df_forest_ritux$group <- "Ritux"
+#df_forest_ocrevus[,c("OR","Lower","Upper")] <- df_forest_ocrevus[,c("OR","Lower","Upper")] + 1.0
+
+# combine the two datasets                      
+df_all = rbind(df_forest_combined, df_forest_ocrevus, df_forest_ritux)
+# you can do the factoring here
+Outcome_order <- c('sdmt_percentage', 'peg_dom_avg', 'footwalk_avg')
+df_all$Outcome = factor (df_all$Outcome, level=Outcome_order)
+#colors
+dotCOLS = c("#a6d8f0","#f9b282", "#FFB6C1")
+barCOLS = c("#008fd5","#de6b35", "#FF69B4")
+
+ggplot(df_all, aes(x=Outcome, y=OR, ymin=Lower, ymax=Upper,col=group,fill=group, group=group)) + 
+#specify position here
+  geom_linerange(linewidth=5,position=position_dodge(width = 0.5)) +
+  #geom_hline(yintercept=1, lty=2) +
+#specify position here too
+  geom_point(size=3, shape=21, colour="white", stroke = 0.5,position=position_dodge(width = 0.5)) +
+  scale_fill_manual(values=barCOLS)+
+  scale_color_manual(values=dotCOLS)+
+  scale_x_discrete(name="Outcomes") +
+  scale_y_continuous(name="Estimate", limits = c(-16, 16)) +
+  coord_flip() +
+  theme_minimal() +
+  geom_signif(stat="signif",position="identity",
+                 comparisons=list(c("footwalk_avg")),map_signif_level = TRUE,annotations="***")
+```
+
+
+
+
+
+
+
+
+#EDSS starts here
+```{r}
+database_new <- database
+
+#cumc edss:
+cumc_edss <- all_data %>% 
+  select(id_participant, edss_score, edss_date) %>% 
+  drop_na(edss_date) %>% 
+  unique()
+cumc_edss$edss_date <- ymd(cumc_edss$edss_date)
+cumc_edss
+
+#umpc edss:
+prt_edss <- database_new %>% 
+  select(id_participant, edss_score, edss_date, edss_complete) %>% 
+  filter(edss_complete == 2) %>% 
+  select(-edss_complete) %>% 
+  unique()
+prt_edss$edss_date <- ymd(prt_edss$edss_date)
+prt_edss
+
+#all edss:
+all_edss <- rbind(cumc_edss, prt_edss)
+#all_edss
+
+#making participant list based on outcome_df (meaning they have sufficient bmi/repop data)
+prt_list <- outcome_df %>% 
+  select(id_participant, outcome_date_start, repop_overall, age) %>% 
+  unique()
+#prt_list
+
+#merging prt list with edss
+edss_bmi2 <- merge(prt_list, all_edss, by = "id_participant")
+edss_bmi <- edss_bmi2 %>%
+  filter(edss_date >= outcome_date_start) %>% 
+  group_by(id_participant) %>% 
+  mutate(n = n_distinct(edss_date)) %>% 
+  ungroup() %>% 
+  unique()
+edss_bmi
+#edss_bmi %>% filter(repop_overall == 1) %>% select(id_participant) %>% unique()
+
+#lili <- edss_bmi %>% 
+#  select(id_participant, n) %>% unique()
+#mean(lili$n)
+#sd(lili$n)
+```
+
+```{r}
+upload <- edss_bmi %>% 
+  select(age, edss_score, id_participant) %>% 
+  dplyr::rename(Age = age, EDSS = edss_score) %>% 
+  unique()
+upload
+
+write.csv(upload, "ar_edss_pre.csv")
+```
+
+```{r}
+library(ggplot2)
+#loading in raw data, ar edss from online tool
+raw2 <- read.csv("ar_edss.csv")
+raw <- raw2 %>% 
+  dplyr::rename(age = Age, score = EDSS, armss = ARMSS, follow_up = Follow_UP, narmss = nARMSS) %>% #renaming, formatting
+  unique()
+raw
+
+raw %>% ggplot(aes(x = armss)) + 
+  geom_histogram(bins = 40) #just to visualize distribution of armss
+```
+
+
+
+```{r}
+#merging raw data with repop data for analysis
+#the output from the last four lines of this code are used to 
+prt_list <- outcome_df %>% select(id_participant, repop_overall, age) %>% unique()
+raw_repop <- merge(raw, prt_list, by = "id_participant")
+raw_repop
+
+non_repop <- raw_repop %>% 
+  filter(repop_overall == 0) %>% 
+  drop_na(armss)
+non_repop
+
+yes_repop <- raw_repop %>% 
+  filter(repop_overall == 1) %>% 
+  drop_na(armss)
+yes_repop
+
+mean(yes_repop$armss) #finding mean and SD for ARMSS and nARMSS for both repop and non-repop groups
+sd(yes_repop$armss)
+mean(yes_repop$narmss)
+sd(yes_repop$narmss)
+```
+
+```{r}
+#use this chunk to check number of participants 
+non_repop %>% select(id_participant) %>% unique()
+```
+
+
+
+
+
+
+
+
+
+
+
+

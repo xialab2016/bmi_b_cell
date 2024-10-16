@@ -1,0 +1,311 @@
+---
+title: "all_repop_new"
+output: html_document
+date: "2023-11-28"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+database <- read.csv('database.csv')
+database
+```
+
+```{r}
+all_data <- read.csv("bmi_bcell_raw.csv")
+all_data[all_data == ""] <- NA
+all_data <- all_data %>% group_by(record_id) %>% fill(id_participant, record_id, dob, subject_sex, demographics_complete)
+all_data <- all_data %>% ungroup() %>% filter(id_participant != "test")
+
+#making all date columns (except relapse date columns for now) of the class date
+all_data$blood_date <- mdy(all_data$blood_date)
+all_data$dob <- ymd(all_data$dob)
+all_data$bmi_date <- ymd(all_data$bmi_date)
+all_data$infusion_date <- ymd(all_data$infusion_date)
+all_data$blood_date_renal <- ymd(all_data$blood_date_renal)
+all_data$edss_date <- ymd(all_data$edss_date)
+all_data
+
+#CD19% data
+cd19_all <- all_data %>% 
+  select(id_participant, cd19_percent, blood_date) %>% 
+  drop_na() %>% 
+  unique()
+cd19_all
+
+#baseline cd19 dates and values
+cd19_baseline <- cd19_all %>% 
+  group_by(id_participant) %>% 
+  filter(blood_date == min(blood_date)) %>% 
+  ungroup() %>% 
+  rename(baseline_blood_date = blood_date) %>% 
+  rename(baseline_cd19_percent = cd19_percent)
+cd19_baseline
+
+#infusion data
+infusion_all <- all_data %>% 
+  select(id_participant, infusion_date, bcell_type, dose, record_id, infusion_complete) %>% 
+  drop_na() %>% 
+  unique()
+infusion_all
+
+#first infusion
+baseline_inf <- infusion_all %>% 
+  group_by(id_participant) %>% 
+  filter(infusion_date == min(infusion_date)) %>% 
+  ungroup() %>% 
+  rename(baseline_infusion_date = infusion_date) %>% 
+  rename(baseline_dose = dose) %>% 
+  rename(baseline_bcell_type = bcell_type) %>% 
+  select(-record_id)
+baseline_inf
+
+#now merging all_cd19 with baseline cd19
+cd19 <- merge(cd19_all, cd19_baseline, by = "id_participant")
+#now merging cd19 with infusion data
+cd19_inf_all2 <- merge(cd19, infusion_all, by = "id_participant")
+#now merging in baseline infusion data
+cd19_boost <- merge(cd19_inf_all2, baseline_inf, by = "id_participant")
+
+#now filtering out any blood dates that are prior to the first infusion date
+cd19_inf_all <- cd19_boost %>% 
+  unique() %>% 
+  filter(blood_date >= baseline_infusion_date) %>% 
+  mutate(repop = ifelse(cd19_percent >= 2.0, 1, 0)) %>% #adding in repop column
+  mutate(time_int = interval(infusion_date, blood_date)) %>% 
+  #adding in time_to_blood column, measures time elapsed from infusion to blood draw
+  mutate(time_to_blood = time_length(time_int, "month")) %>%
+  select(-time_int) %>% 
+  filter(time_to_blood >= 4.5 & time_to_blood < 6) %>% 
+  unique()
+cd19_inf_all
+```
+
+
+```{r}
+#making a bmi df
+bmi_all <- all_data %>% 
+  select(id_participant, bmi, bmi_date) %>% 
+  drop_na()
+bmi_all
+
+#baseline_bmi 
+baseline_bmi <- bmi_all %>% 
+  group_by(id_participant) %>% 
+  filter(bmi_date == min(bmi_date)) %>% 
+  rename(baseline_bmi = bmi) %>% 
+  rename(baseline_bmi_date = bmi_date)
+baseline_bmi
+
+bmi <- merge(bmi_all, baseline_bmi)
+bmi
+```
+
+```{r}
+library(Hmisc)
+#adding in bmi data to cd19/infusion data, then filtering to keep the closest BMI to each blood date
+bmi_cd192 <- merge(cd19_inf_all, bmi, by = "id_participant")
+bmi_cd19 <- bmi_cd192 %>% 
+  select(id_participant, blood_date, cd19_percent, bmi, bmi_date, baseline_bmi) %>% 
+  mutate(time_int = interval(blood_date, bmi_date)) %>% 
+  mutate(time_bmi_blood = abs(time_length(time_int, "month"))) %>% 
+  select(-time_int) %>% 
+  filter(time_bmi_blood <= 9) %>%  #filtering to keep only bmis within 3 months of blood draw
+  group_by(id_participant, blood_date) %>% 
+  filter(time_bmi_blood == min(time_bmi_blood)) %>% #choosing only closest bmi to each blood draw
+  ungroup() %>% 
+  select(id_participant, blood_date, bmi, bmi_date, baseline_bmi)
+bmi_cd19
+
+#now starting to form df to be used in analysis
+covar2 <- merge(cd19_inf_all, bmi_cd19, by = c("id_participant", "blood_date"))
+covar <- covar2 %>% 
+  select(-infusion_complete.x, -infusion_complete.y)
+covar
+
+#making diffDate (column to hold number of months elapsed between two consecutive infusions)
+diff_dates <- covar %>% 
+  select(id_participant, infusion_date) %>% 
+  unique() %>% 
+  arrange(id_participant, infusion_date) %>% 
+  group_by(id_participant) %>% 
+  mutate(previous_inf_date = lag(infusion_date, n=1)) %>% 
+  ungroup() %>% 
+  drop_na(previous_inf_date) %>% 
+  mutate(time_int = interval(previous_inf_date, infusion_date)) %>% 
+  mutate(diffDate_mo = time_length(time_int, "month")) %>% 
+  select(-time_int, -previous_inf_date)
+diff_dates
+
+covarry2 <- merge(covar, diff_dates, by = c("id_participant", "infusion_date"), all.x = TRUE)
+all_repop <- covarry2 %>% 
+  arrange(id_participant, infusion_date) %>% 
+  ungroup() %>% 
+  unique() %>% 
+  filter(diffDate_mo <= 1 | diffDate_mo >= 4.5 | is.na(diffDate_mo)) %>% #filtering to remove infusions that were less than 4.5 months apart, but keeping <=1 month because of starter doses typically being administered close together
+  mutate(time_int = interval(baseline_infusion_date, infusion_date)) %>% 
+  mutate(treatment_dur_mo = time_length(time_int, "month")) %>% 
+  select(-time_int) %>% 
+  filter(blood_date >= baseline_infusion_date) #making sure that only blood draws after baseline infusion date are included
+all_repop
+```
+
+
+```{r}
+#adding a repop_overall column in here
+#then creating a value which assesses the amount of time (in months) from first infusion to blood date (CD19% date/exposure)
+all_repopy <- all_repop %>% 
+  group_by(id_participant) %>% 
+  mutate(repop_overall = ifelse(any(repop == 1), 1, 0)) %>% 
+  ungroup() %>% 
+  mutate(time_int = interval(baseline_infusion_date, blood_date)) %>% 
+  mutate(time_from_first_inf = time_length(time_int, "month")) %>% 
+  #select(-time_int, -X, -end_date, - time_int_blood_pdds, -max_infusion_date, -score, -pdds_date) %>% 
+  unique()
+all_repopy
+
+#Time for assessing repopulation for all participant: 2 years from the date of first infusion
+#Reminder of time frame for evaluating outcomes: [Time of first repopulation event] + [2 years] 
+#For participants that have had at least one repopulation event (within the 2 year exposure window), we want to use only their first repopulation event within this window
+y_all_repop <- all_repopy %>% 
+  filter(repop_overall == 1) %>% 
+  filter(repop == 1 & time_from_first_inf <= 24) %>% 
+  arrange(id_participant, blood_date) %>% 
+  group_by(id_participant) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  mutate(outcome_date_start = blood_date + years(2)) %>% 
+  mutate(outcome_date_end = outcome_date_start + years(2))
+
+#Reminder of time frame for evaluating outcomes: [Time of BCD initiation + 2 years] + [2 years] 
+n_all_repop <- all_repopy %>% 
+  filter(repop_overall == 0) %>% 
+  mutate(outcome_date_start = baseline_infusion_date + years(2)) %>% 
+  mutate(outcome_date_end = outcome_date_start + years(2))
+
+y_all_repop
+n_all_repop
+#y_all_repop %>% select(id_participant) %>% unique()
+#n_all_repop%>% select(id_participant) %>% unique()
+```
+
+```{r}
+#now I'm merging y_all_repop and n_all_repop and keeping only the columns id_participant, outcome_date_start, outcome_date_end
+yn_repop2 <- rbind(y_all_repop, n_all_repop)
+yn_repop <- yn_repop2 %>% 
+  #select(id_participant, outcome_date_start, outcome_date_end) %>% 
+  select(-time_int) %>% 
+  unique()
+yn_repop
+```
+
+```{r}
+#generating demographics for promote prts
+database[database == ""] <- NA
+demogs_prt <- database %>% 
+  select(id_participant, dob, subject_sex, race, ethnicity, date_firstsx) %>% 
+  drop_na(dob)
+demogs_prt$dob <- ymd(demogs_prt$dob)
+demogs_prt
+
+#pulling demographics for CUMC participants
+demogs_cumc <- all_data %>% 
+  select(id_participant, dob, subject_sex, race, ethnicity) %>% 
+  drop_na(dob) %>% 
+  drop_na(race) %>% 
+  filter(!str_detect(id_participant, "PRT")) %>% 
+  unique()
+demogs_cumc$date_firstsx <- NA
+demogs_cumc
+
+#joining
+demogs <- rbind(demogs_prt, demogs_cumc)
+demogs
+
+#adding in first infusion date to calculate baseline infusion date
+baseline_age2 <- baseline_inf %>% 
+  select(id_participant, baseline_infusion_date) %>% 
+  unique()
+baseline_age <- merge(baseline_age2, demogs, by = "id_participant")
+baseline_age <- baseline_age %>% 
+  mutate(time_int = interval(dob, baseline_infusion_date)) %>% 
+  mutate(age_mo = time_length(time_int, "month")) %>% 
+  mutate(age = age_mo/12) %>% #adding in age at time of first infusion
+  select(-time_int, -age_mo)
+baseline_age$date_firstsx <- ymd(baseline_age$date_firstsx)
+baseline_age <- baseline_age %>% 
+  mutate(time_int = interval(date_firstsx, baseline_infusion_date)) %>% 
+  mutate(dx_dur = time_length(time_int, "month")) %>% #adding in dx_dur
+  select(-time_int, -date_firstsx)
+baseline_age
+```
+
+```{r}
+#joining yn_repop and the demographics
+outcome2 <- merge(yn_repop, baseline_age, by = "id_participant")
+outcome <- outcome2 %>% 
+  rename(baseline_infusion_date = baseline_infusion_date.x) %>% 
+  select(-baseline_infusion_date.y) %>% 
+  mutate(race_eth = ifelse((race == 4 & ethnicity == 2), 1, 2)) %>% #dichotomizing race/ethnicity (1 = white and non-Hispanic, 2 = non-white and/or Hispanic)
+  #select(-race, -ethnicity) %>% 
+  mutate(bcell_group = ifelse(bcell_type == 1, 1, 2)) #dichotomizing BCD DMT type (1 = Ocrevus, 2 = Rituximab and biosimilars)
+outcome
+```
+
+#export to read into each individual outcome
+```{r}
+write.csv(outcome, "all_repop.csv") #this is the final output file
+```
+
+```{r}
+#just to check number of unique participants
+outcome %>% select(id_participant) %>% unique()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,226 @@
+---
+title: "OCT BMI Bcell"
+output: html_document
+date: "2023-10-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+database <- read.csv('database.csv')
+database
+```
+
+#read in most updated version of all_repop
+```{r}
+all_repop2 <- read.csv("all_repop.csv")
+all_repop <- all_repop2 %>% 
+  rename(first_infusion_date = baseline_infusion_date)
+all_repop
+```
+
+###make sure oct_bmi.csv is updated from oct_cleaning_query.rmd before reading in here
+```{r}
+library(ggplot2)
+#just checking to see how many bmi prts have oct data available
+oct=read.csv("oct_bmi.csv")
+bmi_oct <- merge(bmi_prt_list, oct, by = "id_participant")
+oct_nums <- bmi_oct %>% select(id_participant, oct_n) %>% unique() %>% 
+  group_by(id_participant) %>% 
+  filter(oct_n == max(oct_n)) %>% 
+  ungroup()
+#oct_nums %>% ggplot(aes(x = oct_n)) +
+#  geom_histogram(bins = 30)
+
+trial <- bmi_oct %>% 
+  dplyr::group_by(id_participant) %>% 
+  mutate(n = n_distinct(oct_n)) %>%
+  ungroup() %>% 
+  select(id_participant, n) %>% 
+  unique()
+trial
+
+mean(trial$n)
+sd(trial$n)
+trial %>% ggplot(aes(x=n)) + #just visualizing available OCT data
+  geom_histogram(bins = 30)
+```
+
+```{r}
+bmi_prt_list2 <- bmi_prt_list
+bmi_prt_list2$outcome_date_start <- ymd(bmi_prt_list2$outcome_date_start)
+bmi_prt_list3 <- bmi_prt_list2 %>% filter(outcome_date_start < Sys.Date()) #filtering out participants who have outcome start dates in the future
+bmi_prt_list3
+```
+
+```{r}
+bust2 <- merge(bmi_prt_list, oct, by = "id_participant")
+bust <- bust2 %>% 
+  group_by(id_participant) %>% 
+  mutate(n = n_distinct(report1_date)) %>% 
+  ungroup()
+```
+
+#Starting Chen's code for analysis using longitudinal OCT
+```{r}
+library(gee)
+library(lme4)
+oct=read.csv("oct_bmi.csv")
+oct=oct %>% filter(id_participant %in% bmi_prt_list3$id_participant)
+#LINE BELOW ADDED BY ES
+oct$report1_date <- ymd(oct$report1_date)
+length(unique(oct$id_participant)) #76
+data=left_join(all_repop,oct,by="id_participant")
+data=data %>% mutate(diff=as.numeric((as.Date(report1_date)-as.Date(first_infusion_date))/365.25))
+summary(data$diff)
+data=data %>% filter(!is.na(diff))
+table(data$subtype_blood2,useNA="ifany")
+#data=data %>% filter(subtype_blood2!="Control")
+#data=data %>% mutate(type=factor(subtype_blood2, level=c("RRMS","PMS")),
+                     #duration=blood_age-age_sx_onset)
+data=data %>% filter(diff>=-1) 
+data=data %>% group_by(id_participant) %>% mutate(time=diff-min(diff))
+data_left=data[,c("id_participant","report1_date",colnames(data)[grepl("left",colnames(data))])]
+colnames(data_left)=c("id_participant","report1_date","rnfl","macular","mac_thickness","min_gcl","avg_gcl","max_gcl")
+data_left$eye="L"
+data_right=data[,c("id_participant","report1_date",colnames(data)[grepl("right",colnames(data))])]
+colnames(data_right)=c("id_participant","report1_date","rnfl","macular","mac_thickness","min_gcl","avg_gcl","max_gcl")
+data_right$eye="R"
+data_eye=rbind(data_right,data_left)
+tmp=data [!duplicated(data$id_participant),c("id_participant","bcell_group","repop_overall","cd19_percent")]
+#tmp$cd19_percent_scale=as.numeric(scale(tmp$cd19_percent))
+#tmp$repop_overall_scale=as.numeric(scale(tmp$repop_overall))
+#tmp$Total.Tau_scale=as.numeric(scale(tmp$Total.Tau))
+#tmp$gfap_scale=as.numeric(scale(tmp$GFAP))
+#tmp$nfl_scale=as.numeric(scale(tmp$NFL))
+#tmp$cd19_percent_tert=ntile(tmp$cd19_percent,2)
+#tmp$repop_overall_tert=ntile(tmp$repop_overall,2)
+#tmp$ttau_tert=ntile(tmp$Total.Tau,2)
+#tmp$nfl_tert=ntile(tmp$NFL,2)
+#tmp$gfap_tert=ntile(tmp$GFAP,2)
+
+data2=left_join(data[,c("id_participant", "age","subject_sex","race_eth","dx_dur","first_infusion_date","report1_date", "diff")],
+               tmp, by="id_participant")
+
+data_long=left_join(data_eye, data2[,c("id_participant","first_infusion_date","report1_date","age","diff", "subject_sex","bcell_group","race_eth","dx_dur", "repop_overall")],
+                    by=c("id_participant","report1_date"))
+
+data_long=data_long %>% arrange(id_participant, eye,diff)
+data_long$eye=factor(data_long$eye)
+data_long$id_participant=factor(data_long$id_participant)
+
+outcome=c("rnfl","macular","mac_thickness","min_gcl","avg_gcl")
+marker=c("repop_overall") #this can just be repop_overall
+covar="age+dx_dur+bcell_group" #adjust covars here
+gee_result=data.frame(outcome=c(), marker=c(), beta=c(), se=c(), p=c())
+i=0
+for (o in outcome){
+  for (m in marker){
+    f=as.formula(paste(o,paste0(m,"+",covar), sep="~"))
+    i=i+1
+    gee_result[i,1]=o
+    gee_result[i,2]=m
+    gee<- gee(f,
+              data = data_long,
+              id = id_participant,
+              family = gaussian(),
+              corstr = "exchangeable")
+    gee_result[i,3:5]=c(gee$coefficients[[2]], sqrt(gee$naive.variance[2,2]),2*pnorm(abs(gee$coefficients[[2]]/sqrt(gee$naive.variance[2,2])),lower.tail = F))
+    
+  }
+}
+write.csv(gee_result,"tab.csv")
+```
+
+```{r}
+
+outcome=c("rnfl","macular","mac_thickness","min_gcl","avg_gcl")
+marker=c("repop_overall")
+covar="(1|id_participant)+age+dx_dur+bcell_group"
+lmer_result=data.frame(outcome=c(), marker=c(), beta=c(), se=c(), p=c())
+i=0
+for (o in outcome){
+  for (m in marker){
+    f=as.formula(paste(o,paste0(m,"*diff+",covar), sep="~"))
+    i=i+1
+    lmer_result[i,1]=o
+    lmer_result[i,2]=m
+    m<- lmer(f,
+             data=data_long,REML = F)
+    print(summary(m))
+    #lmer_result[i,3:4]=summary(m)$coefficients[9,1:2]
+    #lmer_result[i,5]=2*pnorm(abs(summary(m)$coefficients[9,3]),lower.tail = F)
+    
+  }
+}
+
+```
+
+```{r}
+oct=read.csv("oct.csv")
+```
+%>% group_by(id_participant) %>% slice(1)
+```{r}
+bmi_prt <- all_repop2 %>% select(id_participant, race_ethnicity) %>% drop_na() %>% unique()
+bmi_prt
+rnfl <- oct %>% filter(!is.na(average_gcl_left_oct) | !is.na(average_gcl_right_oct)) %>% select(id_participant) %>% unique()
+rnfl
+
+merge(bmi_prt, rnfl, by = "id_participant")
+
+```
+
+```{r}
+free <- all_repop2 %>%
+  filter(repop == 1) %>% 
+  mutate(time_int = interval(first_infusion_date, blood_date)) %>% 
+  mutate(time_to_repop = time_length(time_int, "month")) %>% 
+  select(id_participant, first_infusion_date, blood_date, repop, time_to_repop) %>% 
+  unique() %>% 
+  arrange(id_participant, blood_date) %>% 
+  group_by(id_participant) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  rename(eval_start = blood_date) %>% 
+  mutate(eval_end = eval_start + years(2)) %>% 
+  select(id_participant, eval_start, eval_end)
+free
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

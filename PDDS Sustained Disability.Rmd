@@ -1,0 +1,320 @@
+---
+title: "Sustain Progression"
+author: "Chenyi Chen"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## library loading
+
+```{r}
+library(data.table)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(tidyr)
+library(lubridate) #date import
+library(readr)
+library(readr)
+library(tableone)
+require(openxlsx)
+library(naniar)
+library(readr)
+library(writexl) 
+library(dplyr)
+library(MASS)
+library(ggplot2)
+library(caTools)
+library(corrplot)
+library(patchwork)
+library(gplots)
+library(gridExtra)
+library(tidyr)
+library(readxl)
+# load conflicted package
+library(conflicted)
+# rename the readxl package's select() function
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+conflicted::conflicts_prefer(dplyr::first)
+```
+
+#This query was written by Chenyi
+```{r}
+bmi_prt_list2 <- read.csv("all_repop.csv")
+bmi_prt_list <- bmi_prt_list2 %>% 
+  select(id_participant, outcome_date_start) %>% 
+  unique()
+bmi_prt_list$outcome_date_start <- ymd(bmi_prt_list$outcome_date_start)
+bmi_prt_list <- bmi_prt_list %>% 
+  mutate(today = Sys.Date()) %>% 
+  #filter(outcome_date_start < today) %>% 
+  select(id_participant, outcome_date_start) %>% 
+  unique()
+bmi_prts <- bmi_prt_list #reading in my participant list and outcome start dates
+bmi_prts
+```
+
+# read in PDDS scores and date 
+```{r}
+bmi_prt_list <- bmi_prts
+# load("my_data.RData")
+###in line below change what's inside read_csv() to your source file. In your case, you want it to contain PRTs for all participants in your study that have at least one PDDS score after their covid infection, and all dates and scores of their PDDS [[it should have 3 columns: id_participant, date, score]]
+pdds_all2023_07_17<- read_csv("pdds_all.csv") #%>% select(-"...1")
+
+#ES change: going to try to merge pdds_all file with bmi_prt_list.csv so that I can keep outcome_date_start and filter to keep only scores records after that date and then remove that column to keep the format of the file the same (id_participant, score, date)
+pdds_all2023_07_17_2 <- merge(pdds_all2023_07_17, bmi_prt_list, by = "id_participant")
+pdds_all2023_07_17_2 <- pdds_all2023_07_17_2 %>% 
+  select(-...1) %>% 
+  filter(date >= outcome_date_start) %>% 
+  select(-outcome_date_start) %>% 
+  unique()
+
+# clinical demo
+###in line below change what's inside read_csv() to your source file containing id_participant and the following clinical demographics: doe (date of enrollment), race, ethnicity
+ClinicalDemographics2023_04_12 <- read_csv("clin_dem.csv")#%>% select(-c("...1","race","ethnicity"))
+
+PDDS_base = pdds_all2023_07_17_2 %>% #select(-"...1") %>% 
+  left_join(dplyr::select(ClinicalDemographics2023_04_12,id_participant, doe)) %>%   group_by(id_participant) %>% 
+  mutate(baseline_PDDS = ifelse(date == doe, score, first(score[!is.na(score)]))) %>% dplyr::filter(row_number()==1)
+
+
+pdds_all2023_07_17_2$date <- ymd(pdds_all2023_07_17_2$date)
+pdds_all2023_07_17_2
+```
+```{r}
+###load in just your participant list! it only needs to contain id_participant for all participants in your study (e.g. that have sufficient covid information etc.) Change "bmi_prt_df.csv" to whatever your file is called
+prt_list <- bmi_prts
+prt_list <- prt_list %>% 
+  select(id_participant) %>% unique()
+prt_list
+```
+
+### susatain increase or decrease 
+```{r check if there is any consistant increse score patient}
+# select any PDDS score with in range
+filtered_df <- pdds_all2023_07_17_2 %>%
+  group_by(id_participant) %>%
+  mutate(first_date = min(date)) %>%
+  filter( 
+           (date >= first_date + 183 & date <= first_date + 365*4) #ES EDIT: if you want a six month sustain, this line should read [date >= first_date + 183 & date <= first_date + 365*4] and if you want a 3 month sustain, this line should read [date >= first_date + 91 & date <= first_date + 365*4] . . . I made it 365*4 for a 4 year follow up window to search
+           # 6 month away from baseline and within range of follow-up
+         |date == first_date
+         ) %>% # or baseline PDDS
+  ungroup() %>% arrange(id_participant)
+data2 = filtered_df %>% arrange(id_participant,date)
+data = data2
+
+id <- rep(NA, nrow(data))
+s1date <- rep(NA, nrow(data))
+s1score <- rep(NA, nrow(data))
+s2date <- rep(NA, nrow(data))
+s2score <- rep(NA, nrow(data))
+s3date <- rep(NA, nrow(data))
+s3score <- rep(NA, nrow(data))
+progression <- rep(NA, nrow(data))
+
+for (i in 1:(nrow(data)-2 )) {
+  # Set ID
+  id[i] <- data$id_participant[i]
+
+  # Set S1
+  s1date[i] <- data$date[i]
+  s1score[i] <- data$score[i]
+
+  # Look for S2
+  for (j in (i + 1):nrow(data)) {
+    if (data$id_participant[j] != id[i]) break
+
+    if (data$score[j] >=  s1score[i]  && data$date[j] - s1date[i] >= 90) {
+      s2date[i] <- data$date[j]
+      s2score[i] <- data$score[j]
+      break
+    }
+  }
+
+# Look for S3
+if (!is.na(s2score[i])) {
+  for (k in (j + 1):nrow(data)) {
+    if (data$id_participant[k] != id[i]) break
+
+    if (data$score[k] >= s2score[i] && data$date[k] - s2date[i] >= 90 && data$score[j] > s1score[i]) {
+      s3date[i] <- data$date[k]
+      s3score[i] <- data$score[k]
+      progression[i] <- 1
+      break
+    } else if  ((data$score[k] < s2score[i] |  (data$score[k] == s1score[i] & s1score[i] == s2score[i])) && data$date[k] - s2date[i] >= 90) {
+      progression[i] <- 0
+      s3date[i] <- data$date[k]
+      s3score[i] <- data$score[k]
+      break
+    }
+  }
+}
+}
+
+
+
+output_Progress <- data.frame(id = id, s1date = s1date, s1score = s1score, s2date = s2date, s2score = s2score, s3date = s3date, s3score = s3score, progression = progression) %>% filter(id %in% prt_list$id_participant)
+
+
+# First calculate the progression by id
+output_final <- output_Progress %>%
+  group_by(id) %>%
+  summarise(
+    SUS_progression = ifelse(
+      all(is.na(progression)), NA_real_,
+      ifelse(any(progression == 1, na.rm = TRUE), 1, 
+      ifelse(all(progression == 0, na.rm = TRUE), 0, NA_real_))
+    )
+  )
+
+sustainprogress =  output_Progress %>% 
+  filter(!is.na(s3date)) %>%  
+  group_by(id) %>%arrange(id,desc(progression),s1date,s2date ) %>% 
+  filter(row_number() == 1) %>% select(id,s1date,s2date,s3date)  %>% full_join(output_final)
+table(sustainprogress$SUS_progression)
+```
+
+
+```{r check if there is any consistant Increase score patient}
+data = filtered_df %>% arrange(id_participant,date)
+
+id <- rep(NA, nrow(data))
+s1date_inp <- rep(NA, nrow(data))
+s1score <- rep(NA, nrow(data))
+s2date_inp <- rep(NA, nrow(data))
+s2score <- rep(NA, nrow(data))
+s3date <- rep(NA, nrow(data))
+s3score <- rep(NA, nrow(data))
+progression <- rep(NA, nrow(data))
+
+for (i in 1:(nrow(data)-2)) {
+  # Set ID
+  id[i] <- data$id_participant[i]
+
+  # Set S1
+  s1date_inp[i] <- data$date[i]
+  s1score[i] <- data$score[i]
+
+  # Look for S2
+  for (j in (i + 1):nrow(data)) {
+    if (data$id_participant[j] != id[i]) break
+
+    if (data$score[j] <= s1score[i]  && data$date[j] - s1date[i] >= 90) {
+      s2date_inp[i] <- data$date[j]
+      s2score[i] <- data$score[j]
+      break
+    }
+  }
+
+# Look for S3
+if (!is.na(s2score[i])) {
+  for (k in (j + 1):nrow(data)) {
+    if (data$id_participant[k] != id[i]) break
+
+    if (data$score[k] <= s2score[i] && data$date[k] - s2date_inp[i] >= 90 &&  s1score[i] != s2score[i]) {
+      s3score[i] <- data$score[k]
+      s3date[i] <- data$date[k]
+      progression[i] <- 1
+      break
+    } else if ((data$score[k] > s2score[i] |  (data$score[k] == s1score[i] & s1score[i] == s2score[i])) && data$date[k] - s2date_inp[i] >= 90) {
+      progression[i] <- 0
+      s3date[i] <- data$date[k]
+      s3score[i] <- data$score[k]
+      break
+    }
+  }
+}
+}
+
+
+output <- data.frame(id = id, s1date_inp = s1date_inp, s1score = s1score, s2date_inp = s2date_inp, s2score = s2score, s3date_inp = s3date, s3score = s3score, improvement = progression) %>% filter(id %in% prt_list$id_participant)
+
+# First calculate the progression by id
+output_final_in <- output %>%
+  group_by(id) %>%
+  summarise(
+    improvement = ifelse(
+      all(is.na(improvement)), NA_real_,
+      ifelse(any(improvement == 1, na.rm = TRUE), 2, 
+      ifelse(all(improvement == 0, na.rm = TRUE), 0, NA_real_))
+    )
+  )
+
+
+improve = output %>% filter(!is.na(s3date_inp))  %>% group_by(id)%>%  arrange(id,desc(improvement),s1date_inp,s2date_inp) %>%   filter(row_number() == 1) %>% select(id,s1date_inp,s2date_inp,s3date_inp)  %>% full_join(output_final_in)
+table(improve$improvement)
+```
+
+```{r}
+# merge two data and choose 
+
+df_sustain2 = improve  %>%
+  full_join(sustainprogress) %>%
+  mutate(
+    disability_status = ifelse(is.na(improvement) 
+                               , SUS_progression,
+                           ifelse(is.na(SUS_progression)
+                                  , improvement,
+                                  ifelse(!is.na(improvement) & !is.na(SUS_progression) & SUS_progression == 1 & s1date < s1date_inp, SUS_progression,
+                                         ifelse(!is.na(improvement) & !is.na(SUS_progression)& 
+                                             SUS_progression <  improvement,improvement,   
+                                             ifelse(!is.na(improvement) & !is.na(SUS_progression) & 
+                                             SUS_progression >  improvement,SUS_progression,
+                                             
+                                             
+                                         ifelse(!is.na(improvement) & improvement == 2 & !is.na(SUS_progression) & s1date > s1date_inp, improvement, 3)
+                                  )
+                           )))
+    )
+  ) %>% mutate(disability_status2 = ifelse(disability_status == 3 & 
+                                             s2date <  s2date_inp,SUS_progression,
+                                           ifelse(disability_status == 3 & 
+                                             SUS_progression == improvement& SUS_progression == 0,0,
+                                           
+                                           ifelse(disability_status == 3 &  s2date_inp < s2date,
+                                                  improvement,disability_status))))
+
+
+df_sustain = df_sustain2 %>%  
+    select(disability_status2) %>% 
+    rename(disability_status  = disability_status2,
+           id_participant = id) %>%
+  mutate(
+      improvement = ifelse(disability_status == 2, 1, 0), 
+      SUS_progression = ifelse(disability_status== 1, 1, 0))
+lis = list("data_2yr" = data, "sustain" = df_sustain2)
+#write.xlsx(lis, file = paste("sus_check",today(),".xlsx", sep = ""),rowNames = T,overwrite =T)
+table(df_sustain$disability_status )
+```
+
+#writing file to export for use in analysis
+```{r}
+df_outcome <- df_sustain %>% 
+  select(id_participant, disability_status)
+write.csv(df_outcome, "df_sustain.csv")
+```
+
+
+#Don't worry about this chunk of code. You can use the output above (0, 1, 2) as your sustained disability outcomes
+```{r}
+# 
+score_gap = df_sustain2 %>%
+  mutate(gap_score = ifelse(disability_status2 == 1, s3date - s1date,
+                            ifelse(disability_status2 == 0 & !is.na(s3date), s3date - s1date,
+                                   ifelse(disability_status2 == 0 & !is.na(s3date_inp), s3date_inp - s1date_inp,
+                           ifelse(disability_status == 2, s3date_inp - s1date_inp, NA))))) %>% mutate(gap_mo = gap_score/30)
+
+summary(score_gap$gap_mo)
+```
+
+
+
+
+
+

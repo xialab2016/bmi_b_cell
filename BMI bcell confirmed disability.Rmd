@@ -1,0 +1,330 @@
+---
+title: "BMI B-cell PDDS Sustained Disability Outcomes"
+output: html_document
+date: "2023-09-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+database <- read.csv('database.csv')
+database
+```
+
+
+#now reading in confirmed disability code output
+```{r}
+#Here make sure to read in the right output code depending on whether you're running confirmed or sustained disability progression
+##If running confirmed disability progression, line below is: df_sustain <- read.csv("conf_disability_output.csv")
+##If running sustained disability progression, line below is: df_sustain <- read.csv("df_sustain.csv")
+df_sustain <- read.csv("conf_disability_output.csv")
+df_sustain <- df_sustain %>% 
+  select(-X)
+df_sustain
+#data key!
+## 0 = had sufficient data to assess, neither sustained increase or decrease
+## 1 = had sufficient data to assess, sustained PDDS increase (disability worsening)
+## 2 = had sufficient data to assess, sustained PDDS decrease (disability improvement)
+## NA = did not have sufficient PDDS data to assess
+```
+
+```{r}
+yn_repop2 <- read.csv("all_repop.csv") #reading in repop data
+yn_repop <- yn_repop2 %>% 
+  rename(first_infusion_date = baseline_infusion_date) %>% #renaming
+  rename(treat_dur = treatment_dur_mo)
+yn_repop
+```
+
+
+
+#making binary outcomes for both repopulation (any_repop_occur == 1 if the participant had at least one repopulation event, sustain_worsening == 1 if the participant had a confirmed period of sustained disability worsening [pdds increase], etc.)
+```{r}
+pdds_repop2 <- merge(yn_repop, df_sustain, by = "id_participant")
+pdds_repop <- pdds_repop2 %>% 
+  group_by(id_participant) %>% 
+  #mutate(any_repop_occur = ifelse(any(repop == 1), 1, 0)) %>% 
+  ungroup() %>% 
+  drop_na(disability_status)
+pdds_repop$first_infusion_date <- ymd(pdds_repop$first_infusion_date)
+pdds_repop <- pdds_repop %>% 
+  group_by(id_participant) %>% 
+  mutate(sustain_worsening = ifelse(any(disability_status == 1), 1, 0)) %>% 
+  mutate(sustain_improvement = ifelse(any(disability_status == 2), 1, 0)) %>% 
+  ungroup() %>% 
+  #select(-X) %>% 
+  unique()
+pdds_repop$baseline_blood_date <- ymd(pdds_repop$baseline_blood_date)
+baseline_actual <- pdds_repop %>% 
+  select(id_participant, baseline_blood_date, baseline_cd19_percent, first_infusion_date) %>% 
+  filter(baseline_blood_date < first_infusion_date) %>% 
+  select(-first_infusion_date) %>% 
+  unique()
+baseline_actual
+pdds_repop <- pdds_repop %>% 
+  select(-baseline_blood_date, -baseline_cd19_percent)
+pdds_repop3 <- merge(pdds_repop, baseline_actual, by = "id_participant", all.x = TRUE)
+pdds_repop <- pdds_repop3
+pdds_repop 
+```
+
+
+#starting univariate analysis (continuous vars), separating by DMT
+```{r}
+outcome_df <- pdds_repop %>% drop_na(disability_status) %>% unique()
+ocr_outcome <- outcome_df %>% dplyr::filter(bcell_type == 1)%>% unique()
+rux_ritux_outcome <- outcome_df %>% dplyr::filter(bcell_type == 2 | bcell_type == 3 | bcell_type == 4)%>% unique()
+outcome_df
+```
+
+```{r}
+#I use this chunk to check number of participants
+rux_ritux_outcome %>% select(id_participant) %>% unique()
+```
+
+#dichot variables (Fisher exact test to compare categorical v categorical/binary)
+```{r}
+#sex v. disability worsening
+#looky <- outcome_df %>% select(id_participant, subject_sex, sustain_worsening) %>% unique()
+#contingency_table <- table(looky$sustain_worsening, looky$subject_sex)
+
+#sex v. disability improvement
+#looky <- outcome_df %>% select(id_participant, subject_sex, sustain_improvement) %>% unique()
+#contingency_table <- table(looky$sustain_improvement, looky$subject_sex)
+
+#race eth v disability improvement
+#looky <- outcome_df %>% select(id_participant, race_eth, sustain_improvement) %>% unique()
+#contingency_table <- table(looky$sustain_improvement, looky$race_eth)
+
+#race eth v disability worsening
+looky <- outcome_df %>% select(id_participant, race_eth, sustain_worsening) %>% unique()
+contingency_table <- table(looky$sustain_worsening, looky$race_eth)
+
+#repop_overall v. disability worsening
+#looky <- outcome_df %>% select(id_participant, repop_overall, sustain_worsening) %>% unique()
+#contingency_table <- table(looky$sustain_worsening, looky$repop_overall)
+
+#repop_overall v. disability improve
+#looky <- outcome_df %>% select(id_participant, repop_overall, sustain_improvement) %>% unique()
+#contingency_table <- table(looky$sustain_improvement, looky$repop_overall)
+
+#repop v. disability worsening
+#looky <- outcome_df %>% select(id_participant, repop, sustain_worsening) %>% unique()
+#contingency_table <- table(looky$sustain_worsening, looky$repop)
+
+#repop v. disability improvement
+#looky <- outcome_df %>% select(id_participant, repop, sustain_improvement) %>% unique()
+#contingency_table <- table(looky$sustain_improvement, looky$repop)
+
+res<-fisher.test(contingency_table)
+res
+contingency_table
+```
+
+```{r}
+#generating a contigency table to see data distribution
+looky <- outcome_df %>% 
+  select(id_participant, repop_overall, sustain_worsening) %>% 
+  unique()
+looky
+contingency_table <- table(looky$sustain_worsening, looky$repop_overall)
+contingency_table
+```
+
+
+#univariate analysis, continuous variables v binary outcome using logistic regression
+```{r}
+#age v. sustained worsening
+#model <- glm(sustain_worsening ~ age, data = outcome_df, family = binomial)
+
+#age v. sustained improvement
+#model <- glm(sustain_improvement ~ age, data = outcome_df, family = binomial)
+
+#dx_dur v. sustained worsening
+#model <- glm(sustain_worsening ~ dx_dur, data = outcome_df, family = binomial)
+
+#dx_dur v. sustained improvement
+#model <- glm(sustain_improvement ~ dx_dur, data = outcome_df, family = binomial)
+
+#avg_diffDate v. sustained worsening
+#model <- glm(sustain_worsening ~ diffDate_mo, data = outcome_df, family = binomial)
+
+#avg_diffDate v. sustained improvement
+#model <- glm(sustain_improvement ~ diffDate_mo, data = outcome_df, family = binomial)
+
+#baseline BMI v. sustained worsening
+#model <- glm(sustain_worsening ~ baseline_bmi, data = outcome_df, family = binomial)
+
+#baseline BMI v. sustained improvement
+#model <- glm(sustain_improvement ~ baseline_bmi, data = outcome_df, family = binomial)
+
+#baseline CD19% v. sustained worsening
+model <- glm(sustain_worsening ~ baseline_cd19_percent, data = lizzy, family = binomial)
+
+#baseline CD19% v. sustained improvement
+#model <- glm(sustain_improvement ~ baseline_cd19_percent, data = outcome_df, family = binomial)
+summary(model)
+confint(model)
+```
+
+
+```{r}
+#narrowing down to one row per participant, adjust necessary covars here, separating by DMT
+outcome_df15 <- outcome_df %>% 
+  select(id_participant, sustain_worsening, sustain_improvement, repop_overall, bcell_type, age) %>% 
+  unique()
+ocr_outcome5 <- outcome_df15 %>% dplyr::filter(bcell_type == 1)%>% unique()
+rux_ritux_outcome5 <- outcome_df15 %>% dplyr::filter(bcell_type == 2 | bcell_type == 3 | bcell_type == 4)%>% select(-bcell_type)%>% unique()
+outcome_df5 <- outcome_df15 %>% 
+  select(-bcell_type) %>% unique()
+outcome_df5
+```
+
+#final analysis: Logistic regression Sustained / confirmed worsening v. any_repop_occur including significant covariates
+```{r}
+#sustained worsening v. any_repop_occur ALL PRTs
+model <- glm(sustain_worsening ~ repop_overall + age, data = outcome_df5, family = binomial)
+#summary(model)
+#confint(model)
+
+#sustained worsening v. any_repop_occur OCR PRTs
+#model <- glm(sustain_worsening ~ repop_overall + age, data = ocr_outcome5, family = binomial)
+#summary(model)
+#confint(model)
+
+#sustained worsening v. any_repop_occur ritux PRTs
+#model <- glm(sustain_worsening ~ repop_overall + age, data = rux_ritux_outcome5, family = binomial)
+summary(model)
+confint(model)
+```
+
+```{r}
+#just use this to check number of participants
+outcome_df5  %>% select(id_participant) %>% unique()
+```
+
+
+```{r}
+#this is same as outcome_df5, but uses repop at an event level instead of at a participant level (e.g. repop instead of repop_overall)
+outcome_df6 <- outcome_df %>% 
+  select(id_participant, sustain_worsening, sustain_improvement, repop, bcell_type, age, baseline_bmi, dx_dur) %>% 
+  unique()
+outcome_df6
+ocr_outcome6 <- outcome_df6 %>% dplyr::filter(bcell_type == 1)%>% unique()
+rux_ritux_outcome6 <- outcome_df6 %>% dplyr::filter(bcell_type == 2 | bcell_type == 3 | bcell_type == 4)%>% unique()
+```
+
+
+
+#final analysis: Logistic regression Sustained worsening v. repop including significant covariates (event level)
+```{r}
+#sustained worsening v. repop ALL PRTs
+model <- glm(sustain_worsening ~ repop + age + baseline_bmi, data = outcome_df6, family = binomial)
+#summary(model)
+#confint(model)
+
+#sustained worsening v. repop OCR PRTs
+#model <- glm(sustain_worsening ~ repop + age + baseline_bmi, data = ocr_outcome6, family = binomial)
+#summary(model)
+#confint(model)
+
+#sustained worsening v. repop OCR PRTs
+#model <- glm(sustain_worsening ~ repop + age + baseline_bmi, data = rux_ritux_outcome6, family = binomial)
+summary(model)
+confint(model)
+```
+
+
+```{r}
+rux_ritux_outcome %>% select(id_participant) %>% unique()
+```
+#final analysis: Logistic regression Sustained Improvement v. any_repop_occur including significant covariates
+```{r}
+#sustained worsening v. repop_overall ALL PRTs
+#model <- glm(sustain_improvement ~ repop_overall + age + dx_dur + baseline_bmi, data = outcome_df5, family = binomial)
+#summary(model)
+#confint(model)
+
+#sustained worsening v. repop_overall OCR PRTs
+#model <- glm(sustain_improvement ~ repop_overall + age + dx_dur + baseline_bmi, data = ocr_outcome5, family = binomial)
+#summary(model)
+#confint(model)
+
+#sustained worsening v. repop_overall OCR PRTs
+model <- glm(sustain_improvement ~ repop_overall + age + dx_dur + baseline_bmi, data = rux_ritux_outcome5, family = binomial)
+summary(model)
+confint(model)
+```
+
+#final analysis: Logistic regression Sustained Improvement v. repop including significant covariates (event level)
+```{r}
+#sustained worsening v. any_repop_occur ALL PRTs
+#model <- glm(sustain_improvement ~ repop , data = outcome_df6, family = binomial)
+#summary(model)
+#confint(model)
+
+#sustained worsening v. any_repop_occur OCR PRTs
+#model <- glm(sustain_improvement ~ repop , data = ocr_outcome6, family = binomial)
+#summary(model)
+#confint(model)
+
+#sustained worsening v. any_repop_occur OCR PRTs
+model <- glm(sustain_improvement ~ repop , data = rux_ritux_outcome6, family = binomial)
+summary(model)
+confint(model)
+```
+
+
+
+#final analysis: Logistic regression Sustained Improvement v. any_repop_occur including significant covariates (adjusted for baseline bmi only)
+#note: didn't end up using this in final paper
+```{r}
+#sustained worsening v. any_repop_occur ALL PRTs
+#model <- glm(sustain_improvement ~ any_repop_occur + baseline_bmi, data = outcome_df, family = binomial)
+#summary(model)
+#confint(model)
+
+#sustained worsening v. any_repop_occur OCR PRTs
+#model <- glm(sustain_improvement ~ any_repop_occur + baseline_bmi, data = ocr_outcome, family = binomial)
+#summary(model)
+#confint(model)
+
+#sustained worsening v. any_repop_occur OCR PRTs
+model <- glm(sustain_improvement ~ any_repop_occur + baseline_bmi, data = rux_ritux_outcome, family = binomial)
+summary(model)
+confint(model)
+```
+
+
+
+
+
+
+
+

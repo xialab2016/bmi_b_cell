@@ -1,0 +1,409 @@
+---
+title: "BMI Bcell Functional Testing"
+output: html_document
+date: "2023-10-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+database <- read.csv('database.csv')
+database
+```
+
+
+#Reading in all_repop_new outcome
+```{r}
+yn_repop2 <- read.csv("all_repop.csv")
+all_repop <-yn_repop2 %>% 
+  rename(first_infusion_date = baseline_infusion_date)
+all_repop
+```
+
+#writing participant list to use to select functional testing for only these participants (participants who we have sufficient repopulation data for)
+```{r}
+database[database == ""] <- NA
+dobs <- database %>% 
+  select(id_participant, dob) %>% 
+  drop_na(dob) %>% 
+  unique()
+#dobs$dob <- ymd(dobs$dob)
+bmi_prt_list2 <- all_repop %>% select(id_participant, first_infusion_date) %>% unique()
+bmi_prt_list <- merge(bmi_prt_list2, dobs, by = "id_participant", all.x = TRUE)
+bmi_prt_list
+#write.csv(bmi_prt_list, "bmi_prt_list.csv")
+```
+
+#querying to pull functional testing scores from the database
+```{r}
+ft_df <- database %>% 
+  select(id_participant, sdmt_date, sdmt_score, sdmt_percentage, hpt_date, peg_dom1, peg_dom2, peg_nondom1, peg_nondom2, footwalk_date, t25w1, t25w2, functional_testing_complete)
+ft_df <- ft_df %>% 
+  filter(functional_testing_complete == 2)
+ft_df
+
+sdmt_df <- ft_df %>% 
+  filter(!is.na(sdmt_date) & !is.na(sdmt_score)) %>% 
+  select(id_participant, sdmt_date, sdmt_score, sdmt_percentage)
+hpt_df <- ft_df %>% 
+  filter(!is.na(hpt_date) & !is.na(peg_dom1) & !is.na(peg_nondom1)) %>% 
+  select(id_participant, hpt_date, peg_dom1, peg_dom2, peg_nondom1, peg_nondom2)
+footwalk_df <- ft_df %>% 
+  filter(!is.na(footwalk_date) & !is.na(t25w1)) %>% 
+  select(id_participant, footwalk_date, t25w1, t25w2)
+sdmt_df
+hpt_df
+footwalk_df
+```
+```{r}
+prt_list <- all_repop %>% 
+  select(id_participant) %>% 
+  unique()
+prt_list #making participant list
+```
+
+#pulling ft scores (in separate dfs) for only participants in all_repop (bmi_prt_list)
+```{r}
+sdmt_bmi2 <- merge(sdmt_df, prt_list, by = "id_participant")
+sdmt_bmi <- sdmt_bmi2 #%>% 
+ # select(-outcome_date)
+sdmt_bmi
+hpt_bmi2 <- merge(hpt_df, prt_list, by = "id_participant")
+hpt_bmi <- hpt_bmi2 #%>% 
+  #select(-first_infusion_date, -max_infusion_date)
+hpt_bmi
+footwalk_bmi2 <- merge(footwalk_df, prt_list, by = "id_participant")
+footwalk_bmi <- footwalk_bmi2# %>% 
+  #select(-first_infusion_date, -max_infusion_date)
+footwalk_bmi
+```
+
+#Going to now merge all_repop with these dataframes so that I can start filtering by dates
+#also adding in age at time of first infusion
+#this chunk filters out scores which were recorded before outcome_date_start
+```{r}
+sdmt_repop2 <- merge(sdmt_bmi, all_repop, by = "id_participant")
+sdmt_repop <- sdmt_repop2
+sdmt_repop$sdmt_date <- ymd(sdmt_repop$sdmt_date)
+
+#line below filters for only scores recorded after outcome_date_start
+sdmt_repop <- sdmt_repop %>% 
+  filter(sdmt_date > outcome_date_start) %>% 
+  unique()
+sdmt_repop
+hpt_repop2 <- merge(hpt_bmi, all_repop, by = "id_participant")
+hpt_repop <- hpt_repop2
+hpt_repop$hpt_date <- ymd(hpt_repop$hpt_date)
+#line below filters for only scores recorded after outcome_date_start
+hpt_repop <- hpt_repop %>% 
+  filter(hpt_date > outcome_date_start) %>% 
+  unique()
+hpt_repop
+footwalk_repop2 <- merge(footwalk_bmi, all_repop, by = "id_participant")
+footwalk_repop <- footwalk_repop2 
+footwalk_repop$footwalk_date <- ymd(footwalk_repop$footwalk_date)
+#line below filters for only scores recorded after outcome_date_start
+footwalk_repop <- footwalk_repop %>% 
+  filter(footwalk_date > outcome_date_start) %>% 
+  unique()
+footwalk_repop
+```
+#starting to merge into outcome_df
+```{r}
+library(stringr)
+
+#adding clin dem to sdmt_repop
+outcome_sdmt <- sdmt_repop
+outcome_sdmt$dob <- ymd(outcome_sdmt$dob)
+outcome_sdmt <- outcome_sdmt %>% 
+  group_by(id_participant) %>% 
+  mutate(n = n_distinct(sdmt_date)) %>% 
+  ungroup()
+outcome_sdmt$repop <- as.numeric(outcome_sdmt$repop)
+outcome_sdmt$sdmt_date <- ymd(outcome_sdmt$sdmt_date)
+outcome_sdmt$sdmt_percentage <- as.numeric(outcome_sdmt$sdmt_percentage)
+outcome_sdmt$sdmt_correct <- word(outcome_sdmt$sdmt_score)
+outcome_sdmt$sdmt_correct <- gsub(".*/","",outcome_sdmt$sdmt_correct)
+outcome_sdmt$sdmt_attempt <- gsub("/.*$","",outcome_sdmt$sdmt_score)
+outcome_sdmt$sdmt_correct <- as.numeric(outcome_sdmt$sdmt_correct)
+outcome_sdmt$sdmt_attempt <- as.numeric(outcome_sdmt$sdmt_attempt) #reformatting all number columns
+outcome_sdmt
+
+#now hpt
+outcome_hpt <- hpt_repop
+outcome_hpt$dob <- ymd(outcome_hpt$dob)
+outcome_hpt <- outcome_hpt %>% 
+  group_by(id_participant) %>% 
+  mutate(n = n_distinct(hpt_date)) %>% 
+  ungroup()
+outcome_hpt$repop <- as.numeric(outcome_hpt$repop)
+outcome_hpt$hpt_date <- ymd(outcome_hpt$hpt_date)
+outcome_hpt$peg_dom1 <- as.numeric(outcome_hpt$peg_dom1)
+outcome_hpt$peg_dom2 <- as.numeric(outcome_hpt$peg_dom2)
+outcome_hpt$peg_nondom1 <- as.numeric(outcome_hpt$peg_nondom1)
+outcome_hpt$peg_nondom2 <- as.numeric(outcome_hpt$peg_nondom2) #reformatting number columns
+outcome_hpt <- outcome_hpt %>% 
+  mutate(avg_dom = (peg_dom1 + peg_dom2)/2) %>% 
+  mutate(avg_nondom = (peg_nondom1 + peg_nondom2)/2)
+outcome_hpt
+
+#now footwalk
+outcome_footwalk <- footwalk_repop
+outcome_footwalk$dob <- ymd(outcome_footwalk$dob)
+outcome_footwalk <- outcome_footwalk %>% 
+  group_by(id_participant) %>% 
+  mutate(n = n_distinct(footwalk_date)) %>% 
+  ungroup()
+outcome_footwalk$footwalk_date <- ymd(outcome_footwalk$footwalk_date)
+outcome_footwalk$repop <- as.numeric(outcome_footwalk$repop)
+outcome_footwalk$t25w1 <- as.numeric(outcome_footwalk$t25w1)
+outcome_footwalk$t25w2 <- as.numeric(outcome_footwalk$t25w2) #reformatting number columns
+outcome_footwalk <- outcome_footwalk %>% 
+  mutate(avg_footwalk = (t25w1 + t25w2)/2)
+outcome_footwalk
+```
+#spaghetti plot, just for visualization
+```{r}
+g = ggplot(data = outcome_hpt, aes(x = hpt_date, y = avg_nondom, color = id_participant, group = id_participant)) 
+
+g + 
+
+  geom_line() + 
+
+  theme(legend.position = "none") 
+```
+
+
+#now I'm adding in a column to mark how much time elapsed between outcome_date_start and the outcome
+```{r}
+outcome_sdmt2 <- outcome_sdmt %>% 
+  ungroup() %>% 
+  mutate(time_int = interval(outcome_date_start, sdmt_date)) %>% 
+  mutate(time_to_outcome_mo = time_length(time_int, "month")) %>% 
+  select(-time_int, -X, -bmi, -bmi_date, -infusion_date, -time_to_blood) %>% 
+  unique()
+outcome_sdmt2
+
+outcome_hpt2 <- outcome_hpt %>% 
+  ungroup() %>% 
+  mutate(time_int = interval(outcome_date_start, hpt_date)) %>% 
+  mutate(time_to_outcome_mo = time_length(time_int, "month")) %>% 
+  select(-time_int, -X, -bmi, -bmi_date, -infusion_date, -time_to_blood) %>% 
+  unique()
+outcome_hpt2
+
+outcome_footwalk2 <- outcome_footwalk %>% 
+  ungroup() %>% 
+  mutate(time_int = interval(outcome_date_start, footwalk_date)) %>% 
+  mutate(time_to_outcome_mo = time_length(time_int, "month")) %>% 
+  select(-time_int, -X, -bmi, -bmi_date, -infusion_date, -time_to_blood) %>% 
+  unique()
+outcome_footwalk2
+```
+
+
+#checking average number of scores per participant
+```{r}
+wish <- outcome_footwalk2 %>% select(id_participant, n) %>% unique()
+mean(wish$n)
+sd(wish$n)
+```
+
+```{r}
+#now getting rid of unnecessary columns to reduce the number of repeated rows (ideally want one row per unique functional testing date)
+outcome_footwalk3 <- outcome_footwalk2 %>% 
+  select(id_participant, footwalk_date, t25w1, t25w2, baseline_blood_date, first_infusion_date, baseline_bmi, repop_overall, subject_sex, age, dx_dur, race_eth, bcell_group, avg_footwalk, time_to_outcome_mo) %>% 
+  unique()
+outcome_footwalk3
+
+outcome_sdmt3 <- outcome_sdmt2 %>% 
+  select(id_participant, sdmt_date, sdmt_score, sdmt_percentage, sdmt_correct, sdmt_attempt, baseline_blood_date, first_infusion_date, baseline_bmi, repop_overall, subject_sex, age, dx_dur, race_eth, bcell_group, time_to_outcome_mo) %>% 
+  unique()
+outcome_sdmt3
+
+outcome_hpt3 <- outcome_hpt2 %>% 
+  select(id_participant, hpt_date, peg_dom1, peg_dom2, peg_nondom1, peg_nondom2, avg_dom, avg_nondom, baseline_blood_date, first_infusion_date, baseline_bmi, repop_overall, subject_sex, age, dx_dur, race_eth, bcell_group, time_to_outcome_mo) %>% 
+  unique()
+outcome_hpt3
+```
+
+
+
+#univariate analysis: using linear regression to assess the relationship between covariates and one outcome per functional test (for sdmt using percentage, for hpt using avg dom time, for footwalk using avg time)
+```{r}
+#sdmt age
+#model <- lm(sdmt_percentage ~ age, data = outcome_sdmt3)
+#hpt age
+#model <- lm(avg_dom ~ age, data = outcome_hpt3)
+#footwalk age
+#model <- lm(avg_footwalk ~ age, data = outcome_footwalk3)
+#sdmt dx dur
+#model <- lm(sdmt_percentage ~ dx_dur, data = outcome_sdmt3)
+#hpt dx dur
+#model <- lm(avg_dom ~ dx_dur, data = outcome_hpt3)
+#footwalk dx dur
+#model <- lm(avg_footwalk ~ dx_dur, data = outcome_footwalk3)
+#sdmt follow up
+#model <- lm(sdmt_percentage ~ time_to_outcome_mo, data = outcome_sdmt3)
+#hpt follow up
+#model <- lm(avg_dom ~ time_to_outcome_mo, data = outcome_hpt3)
+#footwalk follow up 
+model <- lm(avg_footwalk ~ time_to_outcome_mo, data = outcome_footwalk3)
+summary(model)
+confint(model)
+```
+
+```{r}
+outcome_footwalk3 %>% select(id_participant) %>% unique()
+```
+
+```{r}
+#dichot variables
+#sdmt sex
+#res <- t.test(sdmt_percentage ~ subject_sex, data = outcome_sdmt3)
+#hpt sex
+#res <- t.test(avg_dom ~ subject_sex, data = outcome_hpt3)
+#footwalk sex
+#res <- t.test(avg_footwalk ~ subject_sex, data = outcome_footwalk3)
+#sdmt race eth
+#res <-t.test(sdmt_percentage ~ race_eth, data = outcome_sdmt3)
+#hpt raceeth
+#res <- t.test(avg_dom ~ race_eth, data = outcome_hpt3)
+#footwalk race eth
+res <- t.test(avg_footwalk ~ race_eth, data = outcome_footwalk3)
+#sdmt v repop_overall
+#res <- t.test(sdmt_percentage ~ repop_overall, data = outcome_sdmt3)
+#hpt v repop_overall
+#res <- t.test(avg_dom ~ repop_overall, data = outcome_hpt3)
+#footwalk v repop overall
+#res <- t.test(avg_footwalk ~repop_overall,data = outcome_footwalk3)
+#sdmt v bcell_group
+#res <- t.test(sdmt_percentage ~ bcell_group, data = outcome_sdmt3)
+#hpt v bcell_group
+#res <- t.test(avg_dom ~ bcell_group, data = outcome_hpt3)
+#footwalk v repop overall
+#res <- t.test(avg_footwalk ~bcell_group,data = outcome_footwalk3)
+res
+```
+
+```{r}
+#used for checking how many participants are in each functional testing subgroup
+outcome_footwalk2 %>% select(id_participant, bcell_group) %>% unique()
+```
+
+
+```{r}
+#making ocrevus + rux/ritux/trux dfs separately
+ocr_outcome_sdmt3 <- outcome_sdmt3 %>% filter(bcell_group == 1)
+rux_outcome_sdmt3 <- outcome_sdmt3 %>% filter(bcell_group == 2)
+ocr_outcome_hpt3 <- outcome_hpt3 %>% filter(bcell_group == 1)
+rux_outcome_hpt3 <- outcome_hpt3 %>% filter(bcell_group == 2)
+ocr_outcome_footwalk3 <- outcome_footwalk3 %>% filter(bcell_group == 1)
+rux_outcome_footwalk3 <- outcome_footwalk3 %>% filter(bcell_group == 2)
+
+#fist <- outcome_sdmt3 %>% select(id_participant, n_after) %>% unique()
+#fist
+#sum(fist$n_after)
+```
+
+#multivariate analysis at participant level (using repop_overall)
+```{r}
+model <- lm(sdmt_percentage ~ repop_overall, data =outcome_sdmt3)
+#model <- lm(sdmt_percentage ~ repop_overall, data =ocr_outcome_sdmt3)
+#model <- lm(sdmt_percentage ~ repop_overall, data =rux_outcome_sdmt3)
+#model <- lm(sdmt_attempt ~ repop_overall, data =outcome_sdmt3)
+#model <- lm(sdmt_attempt ~ repop_overall, data =ocr_outcome_sdmt3)
+#model <- lm(sdmt_attempt ~ repop_overall, data =rux_outcome_sdmt3)
+#model <- lm(sdmt_correct ~ repop_overall, data =outcome_sdmt3)
+#model <- lm(sdmt_correct ~ repop_overall, data =ocr_outcome_sdmt3)
+#model <- lm(sdmt_correct ~ repop_overall, data =rux_outcome_sdmt3)
+#model <- lm(avg_dom ~ repop_overall + age + dx_dur, data =outcome_hpt3)
+#model <- lm(avg_dom ~ repop_overall + age + dx_dur, data =ocr_outcome_hpt3)
+#model <- lm(avg_dom ~ repop_overall + age + dx_dur, data =rux_outcome_hpt3)
+#model <- lm(avg_footwalk ~ repop_overall + age + dx_dur + subject_sex, data =outcome_footwalk3)
+#model <- lm(avg_footwalk ~ repop_overall + dx_dur + age + subject_sex, data =ocr_outcome_footwalk3)
+#model <- lm(avg_footwalk ~ repop_overall + dx_dur + age + subject_sex, data =rux_outcome_footwalk3)
+summary(model)
+confint(model)
+```
+#this is just to check how many participants are in each outcome subgroup
+```{r}
+outcome_footwalk3 %>% 
+  select(id_participant, bcell_group) %>% 
+  filter(bcell_group == 2) %>% 
+  unique()
+```
+
+
+#multivariate analysis at event level (using repop)
+```{r}
+#model <- lm(sdmt_percentage ~ repop + subject_sex, data =outcome_sdmt3)
+model <- lm(sdmt_percentage ~ repop + subject_sex, data =ocr_outcome_sdmt3)
+#model <- lm(sdmt_percentage ~ repop + subject_sex, data =rux_outcome_sdmt3)
+#model <- lm(sdmt_attempt ~ repop + subject_sex, data =outcome_sdmt3)
+#model <- lm(sdmt_attempt ~ repop + subject_sex, data =ocr_outcome_sdmt3)
+#model <- lm(sdmt_attempt ~ repop + subject_sex, data =rux_outcome_sdmt3)
+#model <- lm(sdmt_correct ~ repop + subject_sex, data =outcome_sdmt3)
+#model <- lm(sdmt_correct ~ repop + subject_sex, data =ocr_outcome_sdmt3)
+#model <- lm(sdmt_correct ~ repop + subject_sex, data =rux_outcome_sdmt3)
+#model <- lm(avg_dom ~ repop + age + dx_dur, data =outcome_hpt3)
+#model <- lm(avg_dom ~ repop + age + dx_dur, data =ocr_outcome_hpt3)
+#model <- lm(avg_dom ~ repop + age + dx_dur, data =rux_outcome_hpt3)
+#model <- lm(avg_footwalk ~ repop + dx_dur + age + time_to_outcome_mo + subject_sex, data =outcome_footwalk3)
+#model <- lm(avg_footwalk ~ repop + dx_dur + age + time_to_outcome_mo + subject_sex, data =ocr_outcome_footwalk3)
+#model <- lm(avg_footwalk ~ repop + dx_dur + age + time_to_outcome_mo + subject_sex, data =rux_outcome_footwalk3)
+summary(model)
+confint(model)
+```
+
+
+#for checking how many participants
+```{r}
+outcome_sdmt3 %>% select(id_participant) %>% unique()
+```
+#checking to see how many participants have scores before and after BCD initiation
+```{r}
+bef <-outcome_footwalk2 %>% filter(footwalk_date < first_infusion_date) %>% select(id_participant) %>% unique()
+after <- outcome_footwalk2 %>% filter(footwalk_date>=first_infusion_date) %>% select(id_participant) %>% unique()
+merge(bef, after, by = "id_participant")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

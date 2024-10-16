@@ -1,0 +1,228 @@
+---
+title: "Relapse Query ES"
+output: html_document
+date: "2023-10-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+library(data.table)
+library(plyr); library(dplyr)
+library(stringr)
+library(ggplot2)
+library(tidyr)
+library(Rcpp)
+
+#Finds list of all relapses recorded for all PROMOTE participants across all sources
+  #does not include participants who we've only ever recorded not having relapses
+
+#Files used: PROMOTE Database, PROMOTE Longitudinal, covid, pre/pro
+
+#CHANGE FILE PATHS
+```
+```{r}
+database <- read.csv("database.csv")
+database
+```
+```{r}
+library(lubridate)
+all_repop <- read.csv("all_repop.csv")
+bmi_prt_list2 <- read.csv("all_repop.csv")
+bmi_prt_list <- bmi_prt_list2 %>% 
+  select(id_participant, outcome_date_start) %>% 
+  unique()
+bmi_prt_list$outcome_date_start <- ymd(bmi_prt_list$outcome_date_start) #formatting dates
+bmi_prt_list <- bmi_prt_list %>% 
+  mutate(today = Sys.Date()) %>% 
+  filter(outcome_date_start < today) %>% #getting rid of participants who have outcome_date_start in future
+  select(id_participant, outcome_date_start) %>% 
+  unique()
+bmi_prt_list
+```
+
+#this is copied from Libby's relapse_query code, will find all documented relapses in PROMOTE Database for participants in PRT cohort
+```{r}
+#Database history
+relapse_hx <- database[,c("id_participant", "relapse_number", "relapse_first_date", "relapse_first_type", "relapse_second_date", "relapse_second_type", "relapse_third_date", "relapse_third_type", "relapse_fourth_date", "relapse_fourth_type", "relapse_fifth_date", "relapse_fifth_type", "relapse_sixth_date", "relapse_sixth_type", "relapse_seventh_date", "relapse_seventh_type", "relapse_eighth_date", "relapse_eighth_type", "relapse_ninth_date", "relapse_ninth_type", "relapse_tenth_date", "relapse_tenth_type", "relapse_eleventh_date", "relapse_eleventh_type", "relapse_twelfth_date", "relapse_twelfth_type", "relapse_thirteenth_date", "relapse_thirteenth_type", "relapse_fourteenth_date", "relapse_fourteenth_type", "relapse_fifteenth_date", "relapse_fifteenth_type", "relapse_sixteenth_date", "relapse_sixteenth_type", "relapse_seventeenth_date", "relapse_seventeenth_type", "relapse_eighteenth_date", "relapse_eighteenth_type", "relapse_nineteenth_date", "relapse_nineteenth_type", "relapse_twentieth_date", "relapse_twentieth_type")]
+relapse_hx <- relapse_hx %>% filter(!is.na(relapse_number))
+
+relapse_hxDate <- relapse_hx %>% gather(startNumber, relapse_date, 3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41)
+relapse_hxDate <- relapse_hxDate[,c(1,2,23,24)]
+
+relapse_hxType <- relapse_hx %>% gather(typeNumber, type, 4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42)
+relapse_hxType <- relapse_hxType[,c(1,2,23,24)]
+
+relapse_hx2 <- cbind(relapse_hxDate, relapse_hxType)
+relapse_hx2 <- relapse_hx2[,c("id_participant", "relapse_number", "type", "relapse_date")]
+
+#Filter to keep 99s, but get rid of other NAs
+#ES EDIT getting rid of !is.na(type) for right now
+#relapse_hx2 <- relapse_hx2 %>% filter((!is.na(type)) | (relapse_number==99))
+relapse_hx2 <- relapse_hx2 %>% filter((!is.na(relapse_date)) | (relapse_number==99))
+relapse_hx2[relapse_hx2 == ""] <- NA
+relapse_hx2 <- unique(relapse_hx2)
+
+#Label relapse types
+#relapse_hx2$type = factor(relapse_hx2$type, levels = c(1,2,3), labels = c("Clinical", "Radiological", "Both"))
+names(relapse_hx2)[2] <- 'total_number_relapses'
+relapse_hx2 <- relapse_hx2[order(relapse_hx2$id_participant, relapse_hx2$relapse_date), ]
+relapse_hx2 <- ddply(relapse_hx2, .(id_participant), dplyr::mutate, relapse_number = seq_along(total_number_relapses))
+relapse_hx2 <- relapse_hx2[,c("id_participant", "total_number_relapses", "relapse_number", "type", "relapse_date")]
+#relapse_hx2 <- relapse_hx2 %>% filter((!str_detect(relapse_date, "2023")))
+relapse_hx2 <- relapse_hx2[,-c(2,3)]
+```
+
+#Reading in participant list for BMI Bcell project
+```{r}
+#write.csv(relapse_hx2, "relapse_all.csv")
+bmi_prt <- read.csv("bmi_prt_list.csv")
+#bmi_prt <- bmi_prt %>% select(-X)
+#making dataframe containing all relapse information for PRT participants in the BMI bcell project
+bmi_relapse_prt2 <- merge(bmi_prt, relapse_hx2, by = "id_participant")
+bmi_relapse_prt <- bmi_relapse_prt2 %>% unique()
+bmi_relapse_prt
+#making a datafram containing all relapse information for CUMC participants in the BMI bcell project
+all_data <- read.csv("bmi_bcell_raw.csv")
+all_data[all_data == ""] <- NA
+all_data <- all_data %>% 
+  group_by(record_id) %>% 
+  fill(id_participant, dob, subject_sex, demographics_complete) #reformatting raw bcell file
+all_data <- all_data %>% 
+  ungroup() %>% 
+  filter(id_participant != "test")
+cumc <- all_data %>% filter(str_detect(record_id, "CUMC")) #making a CUMC cohort file so I can separately pull their relapse information
+cumc
+
+#Keep running code below to include CUMC participants
+```
+
+#now making outcome time frames for CUMC participants
+```{r}
+library(lubridate)
+cumc$infusion_date <- ymd(cumc$infusion_date)
+cumc <- cumc %>% 
+  group_by(id_participant) %>% 
+  mutate(first_infusion_date = min(infusion_date)) %>% 
+  ungroup()
+cumc
+#making new data frame to hold first infusion date, then another column to hold outcome_date_start (first_infusion + 2 years), then another column to hold outcome_date_end (outcome_date_start + 2 years)
+f_inf_cumc <- cumc %>% 
+  select(id_participant, infusion_date) %>% 
+  group_by(id_participant) %>% 
+  filter(infusion_date == min(infusion_date)) %>% 
+  ungroup() %>% 
+  rename(first_infusion_date = infusion_date) %>% 
+  mutate(outcome_date_start = first_infusion_date + years(2)) %>% 
+  mutate(outcome_date_end = outcome_date_start + years(2)) %>% 
+  unique()
+f_inf_cumc
+cumc2 <- merge(cumc, f_inf_cumc, by = "id_participant")
+cumc2 <- cumc2 %>% 
+  select(id_participant, outcome_date_start, outcome_date_end) %>% 
+  unique()
+cumc2
+```
+
+
+#adapting Libby's relapse query code to work on only the CUMC BMI participants
+```{r}
+#Database history
+relapse_hx <- cumc[,c("id_participant", "relapse_number", "relapse_first_date", "relapse_first_type", "relapse_second_date", "relapse_second_type", "relapse_third_date", "relapse_third_type", "relapse_fourth_date", "relapse_fourth_type", "relapse_fifth_date", "relapse_fifth_type", "relapse_sixth_date", "relapse_sixth_type", "relapse_seventh_date", "relapse_seventh_type", "relapse_eighth_date", "relapse_eighth_type", "relapse_ninth_date", "relapse_ninth_type", "relapse_tenth_date", "relapse_tenth_type", "relapse_eleventh_date", "relapse_eleventh_type", "relapse_twelfth_date", "relapse_twelfth_type", "relapse_thirteenth_date", "relapse_thirteenth_type", "relapse_fourteenth_date", "relapse_fourteenth_type", "relapse_fifteenth_date", "relapse_fifteenth_type", "relapse_sixteenth_date", "relapse_sixteenth_type", "relapse_seventeenth_date", "relapse_seventeenth_type", "relapse_eighteenth_date", "relapse_eighteenth_type", "relapse_nineteenth_date", "relapse_nineteenth_type", "relapse_twentieth_date", "relapse_twentieth_type")]
+relapse_hx <- relapse_hx %>% filter(!is.na(relapse_number))
+
+relapse_hxDate <- relapse_hx %>% gather(startNumber, relapse_date, 3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41)
+relapse_hxDate <- relapse_hxDate[,c(1,2,23,24)]
+
+relapse_hxType <- relapse_hx %>% gather(typeNumber, type, 4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42)
+relapse_hxType <- relapse_hxType[,c(1,2,23,24)]
+
+relapse_hx2 <- cbind(relapse_hxDate, relapse_hxType)
+relapse_hx2 <- relapse_hx2 %>% select("id_participant", "relapse_number", "type", "relapse_date")
+
+#Filter to keep 99s, but get rid of other NAs
+relapse_hx2 <- relapse_hx2 %>% filter((!is.na(type)) | (relapse_number==99))
+relapse_hx2[relapse_hx2 == ""] <- NA
+relapse_hx2 <- unique(relapse_hx2)
+
+#Label relapse types
+#relapse_hx2$type = factor(relapse_hx2$type, levels = c(1,2,3), labels = c("Clinical", "Radiological", "Both"))
+names(relapse_hx2)[2] <- 'total_number_relapses'
+relapse_hx2 <- relapse_hx2[order(relapse_hx2$id_participant, relapse_hx2$relapse_date), ]
+relapse_hx2 <- ddply(relapse_hx2, .(id_participant), dplyr::mutate, relapse_number = seq_along(total_number_relapses))
+relapse_hx2 <- relapse_hx2[,c("id_participant", "total_number_relapses", "relapse_number", "type", "relapse_date")]
+relapse_hx2 <- relapse_hx2 %>% filter((!str_detect(relapse_date, "2023")))
+relapse_hx2 <- relapse_hx2[,-c(2,3)]
+#relapse_hx2$outcome_date_start <- NA
+#relapse_hx2$outcome_date_end <- NA
+```
+
+#now adding outcome_date_start and outcome_date_end to the cumc relapse file
+```{r}
+cumc_relapse_prt <- merge(relapse_hx2, cumc2, by = "id_participant")
+cumc_relapse_prt
+```
+
+
+#now combining the relapse outcome dfs for pitt and cumc, then writing the final file
+```{r}
+library(lubridate)
+cumc_relapse_prt <- cumc_relapse_prt %>% select(-outcome_date_end)
+bmi_relapse_prt2 <- bmi_relapse_prt
+bmi_relapse_prt2$outcome_date_start <-ymd(bmi_relapse_prt2$outcome_date_start)
+#bmi_relapse_prt2$outcome_date_end <-ymd(bmi_relapse_prt2$outcome_date_end)
+bmi_relapse_outcomes <- rbind(bmi_relapse_prt2, cumc_relapse_prt)
+bmi_relapse_outcomes <- bmi_relapse_outcomes %>% 
+  drop_na(relapse_date)
+bmi_relapse_outcomes
+write.csv(bmi_relapse_outcomes, "bmi_relapse_prts.csv")
+
+#now open Relapse Outcome.Rmd and run
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
