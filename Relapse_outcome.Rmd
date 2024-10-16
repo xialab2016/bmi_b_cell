@@ -107,8 +107,9 @@ Combine_df_3outcome =Combined_data %>%  left_join(dplyr::select (select_outcome_
   group_by(id_participant,sample_date) %>% arrange(id_participant) %>% 
   slice(1)
 ```
-#THE OUTPUT of this will be used back in BMI B-cell relapse.rmd just before merging with all_repop
+
 ```{r}
+#THE OUTPUT of this will be used back in BMI B-cell relapse.rmd just before merging with all_repop
 write.csv(Combine_df_3outcome, "bmi_bcell_relapse_outcomes.csv")
 ```
 
