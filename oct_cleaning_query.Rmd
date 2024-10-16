@@ -1,34 +1,12 @@
 ---
 title: "OCT pulling query"
 output: html_document
-date: "2023-10-25"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-#This query was sent to me by Chen
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 ```{r}
 library(dplyr)
 library(reshape)
@@ -196,7 +174,7 @@ data$dob=as.Date(data$dob)
 data$date_firstsx=as.Date(data$date_firstsx)
 data$date_msdx=as.Date(data$date_msdx)
 data$dmt_start_date=as.Date(data$dmt_start_date)
-#write.csv(data, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817/BasicInformation.csv",row.names = F)
+#write.csv(data, "~/BasicInformation.csv",row.names = F)
 
 
 #### Primary and self-reported questionnaire ####
@@ -208,51 +186,51 @@ data=data[n_miss!=6,]
 dim(data); length(unique(data$id_participant))
 data=data %>% filter(pq1_sent!="" | sro1_sent!="")
 dim(data); length(unique(data$id_participant))
-write.csv(data, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230530/Primary_Self_Reported_Questionnaire.csv",row.names = F)
+write.csv(data, "~/Primary_Self_Reported_Questionnaire.csv",row.names = F)
 
 #### Blood sample ####
 ##### nrow=2702, n_id=1677, 1677 ppts had >=1 blood draw ####
-DATA=read.csv("~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Raw_20230817/PROMOTEDatabase_DATA_2023-08-17_1144.csv")
+DATA=read.csv("~/PROMOTEDatabase_DATA_2023-08-17_1144.csv")
 
 data=DATA[,c(1,2,160:271)]
 data<- data %>% filter( blood1_date!="")
 n_miss=apply(data[,3:114], MARGIN=1, FUN=function(x) {sum(is.na(x))+sum(x=="",na.rm = T)})
 table(n_miss)
 dim(data); length(unique(data$id_participant))
-write.csv(data, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817/BloodSample.csv",row.names = F)
+write.csv(data, "~/BloodSample.csv",row.names = F)
 
 #### Stool sample ####
 ##### nrow=385, n_id=251, 251 ppts had >=1 stool collection ####
 data=DATA[,c(1,2,272:331)]
 data<- data %>% filter( stool1_screening!="")
 dim(data); length(unique(data$id_participant))
-write.csv(data, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817/StoolSample.csv",row.names = F)
+write.csv(data, "~/StoolSample.csv",row.names = F)
 #### CSF sample ####
 ##### nrow=167, n_id=166, 166 ppts had >=1 CSF sample ####
 data=DATA[,c(1,2,436:458)]
 data<- data %>% filter( csf_date!="")
 dim(data); length(unique(data$id_participant))
-write.csv(data, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817/CSFSample.csv",row.names = F)
+write.csv(data, "~/CSFSample.csv",row.names = F)
 #### DNA sample ####
 ##### nrow=262, n_id=262, 262 ppts had DNA sample ####
 data=DATA[,c(1,2,492:496)]
 data<- data %>% filter( dna_date_collected!="")
 dim(data); length(unique(data$id_participant))
-write.csv(data, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817//DNASample.csv",row.names = F)
+write.csv(data, "~/DNASample.csv",row.names = F)
 
 #### Functional test ####
 #### nrow=1116, n_id=738, 738 ppts had >=1 tests ####
 data=DATA[,c(1,2,497:559)]
 data<- data %>% filter( sdmt_date!="" |pasat_date!=""| hpt_date!=""| footwalk_date!=""|tug_date!=""|visual_acuity_date!=""|mri_current!="")
 dim(data); length(unique(data$id_participant))
-write.csv(data, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817/FunctionalTest.csv",row.names = F)
+write.csv(data, "~/FunctionalTest.csv",row.names = F)
 
 #### EDSS ####
 #### nrow=504, n_id=399, 399 ppts had EDSS or ambulatory table  ####
 data=DATA[,c(1,2,560:576)]
 data<- data %>% filter( edss_date!=""|ambulatory_table_date!="")
 dim(data); length(unique(data$id_participant))
-write.csv(data, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817//EDSS.csv",row.names = F)
+write.csv(data, "~/EDSS.csv",row.names = F)
 #### Relapse History before initial consent day####
 #### 507 ppts had data on relapse history ####
 data=DATA[,c(1,2,668:749)]
@@ -274,7 +252,7 @@ long$relapse_type=long2$relapse_type
 long=long %>%  group_by(id_participant)%>% mutate(n=1:length(id_participant)) %>% arrange(id_participant) 
 long=long %>% filter(n<= relapse_number)
 dim(long); length(unique(long$id_participant))
-write.csv(long, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817/RelapseHistory.csv",row.names = F)
+write.csv(long, "~/RelapseHistory.csv",row.names = F)
 #### DMT History before initial consent day####
 ####  400 ppts had data on DMT history ####
 data=DATA[,c(1,2,750:791)]
@@ -303,7 +281,7 @@ long=long%>% arrange(id_participant)
 long=long %>%  group_by(id_participant)%>% mutate(DMT_n=1:length(id_participant)) 
 long=long[,c(1,2,3,8,4,5,6,7)]
 dim(long); length(unique(long$id_participant))
-write.csv(long, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817//DMTHistory.csv",row.names = F)
+write.csv(long, "~/DMTHistory.csv",row.names = F)
 
 #### PDDS History before initial consent day####
 #### nrow=8912, n_id=1500, 1500 ppt had data of PDDS history ####
@@ -327,7 +305,7 @@ long=long %>%  group_by(id_participant)%>% mutate(PDDS_n=1:length(id_participant
 long=long[,c(1,2,3,6,4,5)]
 long=long %>% filter(PDDS_n<=pdds_number)
 dim(long); length(unique(long$id_participant))
-write.csv(long, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817//PDDSHistory.csv",row.names = F)
+write.csv(long, "~/PDDSHistory.csv",row.names = F)
 
 #### MSRSR historry ####
 #### nrow=7389, n_id=1320, 1320 ppt had data of MSRSR history ####
@@ -380,11 +358,11 @@ long=long %>%  group_by(id_participant)%>% mutate(MSRSR_n=1:length(id_participan
 long=long[,c(1,2,3,13,4:12)]
 long=long %>% filter(MSRSR_n<=msrsr_number)
 dim(long); length(unique(long$id_participant))
-write.csv(long, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817//MSRSRHistory.csv",row.names = F)
+write.csv(long, "~/MSRSRHistory.csv",row.names = F)
 
 
 ###PROMISE###
-data=read.csv("~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Raw_20230817/PROMOTELongitudinalQ_DATA_2023-08-17_1210.csv")
+data=read.csv("~/PROMOTELongitudinalQ_DATA_2023-08-17_1210.csv")
 names=colnames(data)[str_starts(colnames(data),"promis")==T]
 which(grepl("promis_bank",names)==T)
 pa_name=names[1:488]
@@ -398,7 +376,7 @@ length(unique(physical$id_participant_l))
 colnames(physical)[1:2]=c("id_participant","promis_physical_function_date")
 physical$promis_physical_function_date=as.Date(physical$promis_physical_function_date)
 physical=physical %>% arrange(id_participant,promis_physical_function_date)
-write.csv(physical, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817/promis_physical_function.csv",row.names = F)
+write.csv(physical, "~/promis_physical_function.csv",row.names = F)
 
 cog=data %>% dplyr::select(id_participant_l, any_of(cog_name)) 
 cog=cog %>% dplyr::select(id_participant_l,promis_bank_v20_cognitive_function_timestamp,promis_bank_v20_cognitive_function_tscore,promis_bank_v20_cognitive_function_std_error)
@@ -407,7 +385,7 @@ length(unique(cog$id_participant_l))
 colnames(cog)[1:2]=c("id_participant","promis_cognition_date")
 cog$promis_cognition_date=as.Date(cog$promis_cognition_date)
 cog=cog %>% arrange(id_participant,promis_cognition_date)
-write.csv(cog, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817//promis_cognitionn.csv",row.names = F)
+write.csv(cog, "~/promis_cognitionn.csv",row.names = F)
 
 dep=data %>% dplyr::select(id_participant_l, any_of(dep_name)) 
 dep=dep %>% dplyr::select(id_participant_l,promis_bank_v10_depression_timestamp,promis_bank_v10_depression_tscore,promis_bank_v10_depression_std_error)
@@ -416,7 +394,7 @@ length(unique(dep$id_participant_l))
 colnames(dep)[1:2]=c("id_participant","promis_depression_date")
 dep$promis_depression_date=as.Date(dep$promis_depression_date)
 dep=dep %>% arrange(id_participant,promis_depression_date)
-write.csv(dep, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817/promis_depression.csv",row.names = F)
+write.csv(dep, "~/promis_depression.csv",row.names = F)
 
 
 ### OCT ####
@@ -464,7 +442,7 @@ oct=oct %>% mutate(rnfl_left_oct=ifelse(rnfl_left_oct==9999, NA, rnfl_left_oct),
                    average_gcl_right_oct=ifelse(average_gcl_right_oct==9999, NA, average_gcl_right_oct),
                    maximum_gcl_left_oct=ifelse(maximum_gcl_left_oct==9999, NA, maximum_gcl_left_oct),
                    maximum_gcl_right_oct=ifelse(maximum_gcl_right_oct==9999, NA, maximum_gcl_right_oct) )
-write.csv(oct, "~/OneDrive - University of Pittsburgh/XiaLab/PROMOTEDATA/Clean_20230817//oct.csv",row.names = F)
+write.csv(oct, "~/oct.csv",row.names = F)
 ```
 
 
