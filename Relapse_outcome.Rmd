@@ -1,7 +1,5 @@
 ---
 title: "Relapse_outcome"
-author: "Chenyi Chen"
-date: "`r Sys.Date()`"
 output: html_document
 ---
 
@@ -41,7 +39,7 @@ Combined_data
 ```
 
 
-## below is code from Wen/Chenyi to generate the relapse outcomes desired (N, annualized relapse rate, and time to first relapse)
+## To generate the relapse outcomes desired (N, annualized relapse rate, and time to first relapse)
 
 # find out outcome wanted: 
 ```{r}
